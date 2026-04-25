@@ -77,3 +77,10 @@ python local_bridge\server.py serve --task test_case\模特图.md
 ```powershell
 python local_bridge\server.py inspect test_case\模特图.md
 ```
+
+
+## 更新 skills
+
+```powershell
+npx openapi-to-skills D:\Code\media\media_ai\docs\openapi.json -o .codex\skills
+```
