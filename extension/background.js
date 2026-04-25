@@ -10,6 +10,9 @@ const controllerState = {
   currentTabId: null,
 };
 
+let controllerLoopRunning = false;
+let stopRequested = false;
+
 async function loadSettings() {
   const stored = await chrome.storage.local.get(["serverUrl"]);
   if (stored.serverUrl) {
@@ -79,44 +82,127 @@ async function ensureContentScript(tabId) {
   }
 }
 
+function chatStartUrl() {
+  return "https://chatgpt.com/images";
+}
+
+function waitForTabComplete(tabId, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error(`Timed out while waiting for tab ${tabId} to load`));
+    }, timeoutMs);
+
+    function listener(updatedTabId, changeInfo) {
+      if (updatedTabId !== tabId || changeInfo.status !== "complete") {
+        return;
+      }
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }
+
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+async function openFreshChatWindow() {
+  const createdWindow = await chrome.windows.create({
+    url: chatStartUrl(),
+    type: "normal",
+    focused: true,
+  });
+  const tab = createdWindow.tabs?.[0];
+  if (!createdWindow.id || !tab?.id) {
+    throw new Error("Failed to create ChatGPT window");
+  }
+  await waitForTabComplete(tab.id);
+  await ensureContentScript(tab.id);
+  return { tabId: tab.id, windowId: createdWindow.id };
+}
+
+async function runJobInFreshTab(job) {
+  let tabId = null;
+  let windowId = null;
+  try {
+    const freshTarget = await openFreshChatWindow();
+    tabId = freshTarget.tabId;
+    windowId = freshTarget.windowId;
+    controllerState.currentTabId = tabId;
+    controllerState.currentJobId = job.id;
+    controllerState.busy = true;
+    setStatus(`Running ${job.id}`);
+
+    await chrome.tabs.sendMessage(tabId, {
+      type: "controller:runSingleJob",
+      serverUrl: controllerState.serverUrl,
+      job,
+    });
+  } finally {
+    if (windowId !== null) {
+      await chrome.windows.remove(windowId).catch(() => {});
+    } else if (tabId !== null) {
+      await chrome.tabs.remove(tabId).catch(() => {});
+    }
+    controllerState.busy = false;
+    controllerState.currentJobId = null;
+    controllerState.currentTabId = null;
+    broadcastState();
+  }
+}
+
+async function runControllerLoop() {
+  if (controllerLoopRunning) {
+    return;
+  }
+
+  controllerLoopRunning = true;
+  stopRequested = false;
+  try {
+    while (controllerState.running && !stopRequested) {
+      const payload = await claimJob();
+      if (!payload.job) {
+        setStatus("No pending jobs");
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        continue;
+      }
+
+      try {
+        await runJobInFreshTab(payload.job);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        try {
+          await requeueJob(payload.job.id);
+          setStatus(`Requeued ${payload.job.id}`, reason);
+        } catch (_requeueError) {
+          setStatus(`Failed ${payload.job.id}`, reason);
+        }
+      }
+    }
+  } finally {
+    controllerLoopRunning = false;
+    controllerState.busy = false;
+    controllerState.currentJobId = null;
+    broadcastState();
+  }
+}
+
 async function startController(serverUrl) {
   controllerState.serverUrl = (serverUrl || DEFAULT_SERVER_URL).trim() || DEFAULT_SERVER_URL;
   await saveSettings();
 
-  const tab = await findChatTab();
-  if (!tab?.id) {
-    setStatus("Open a logged-in ChatGPT tab first");
-    return;
-  }
-
-  controllerState.currentTabId = tab.id;
-
-  try {
-    await ensureContentScript(tab.id);
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "controller:start",
-      serverUrl: controllerState.serverUrl,
-    });
-    controllerState.running = true;
-    controllerState.busy = response?.state?.busy ?? false;
-    controllerState.currentJobId = response?.state?.currentJobId ?? null;
-    setStatus(response?.state?.lastMessage || "Controller started", response?.state?.lastError || null);
-  } catch (error) {
-    setStatus("Failed to start page automation", String(error));
-  }
+  controllerState.running = true;
+  controllerState.busy = false;
+  controllerState.currentJobId = null;
+  setStatus("Controller started");
+  runControllerLoop().catch((error) => {
+    controllerState.running = false;
+    setStatus("Controller failed", String(error));
+  });
 }
 
 async function stopController() {
-  const tab = await findChatTab();
-  if (tab?.id) {
-    try {
-      await ensureContentScript(tab.id);
-      await chrome.tabs.sendMessage(tab.id, { type: "controller:stop" });
-    } catch (_error) {
-      // Ignore and still reset UI state.
-    }
-  }
-
+  stopRequested = true;
   controllerState.running = false;
   controllerState.busy = false;
   controllerState.currentJobId = null;
@@ -124,29 +210,6 @@ async function stopController() {
 }
 
 async function syncStateFromTab() {
-  const tab = await findChatTab();
-  if (!tab?.id) {
-    controllerState.currentTabId = null;
-    return controllerState;
-  }
-
-  controllerState.currentTabId = tab.id;
-
-  try {
-    await ensureContentScript(tab.id);
-    const response = await chrome.tabs.sendMessage(tab.id, { type: "controller:getState" });
-    if (response?.state) {
-      controllerState.running = response.state.running;
-      controllerState.busy = response.state.busy;
-      controllerState.currentJobId = response.state.currentJobId;
-      controllerState.serverUrl = response.state.serverUrl || controllerState.serverUrl;
-      controllerState.lastMessage = response.state.lastMessage || controllerState.lastMessage;
-      controllerState.lastError = response.state.lastError || null;
-    }
-  } catch (_error) {
-    // Keep last known state if the page cannot respond.
-  }
-
   return controllerState;
 }
 

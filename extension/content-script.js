@@ -768,6 +768,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "controller:runSingleJob") {
+    controllerState.serverUrl = message.serverUrl || controllerState.serverUrl;
+    controllerState.running = true;
+    controllerState.busy = true;
+    controllerState.currentJobId = message.job?.id || null;
+    controllerState.lastError = null;
+    controllerState.lastMessage = `Running ${controllerState.currentJobId || "job"}`;
+    runJob(message.job, controllerState.serverUrl)
+      .then(() => {
+        controllerState.busy = false;
+        controllerState.currentJobId = null;
+        sendResponse({ ok: true, state: { ...controllerState } });
+      })
+      .catch((error) => {
+        controllerState.busy = false;
+        controllerState.currentJobId = null;
+        sendResponse({ ok: false, error: String(error), state: { ...controllerState } });
+      });
+    return true;
+  }
+
   if (message?.type === "controller:getState") {
     sendResponse({ ok: true, state: { ...controllerState } });
     return true;

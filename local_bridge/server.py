@@ -5,16 +5,20 @@ import base64
 import hashlib
 import json
 import mimetypes
+import os
 import pathlib
 import re
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
@@ -99,6 +103,7 @@ class Job:
     failure_reason: str | None = None
     worker_id: str | None = None
     progress: list[dict[str, Any]] = field(default_factory=list)
+    media_ai: dict[str, Any] | None = None
 
     def to_public_dict(self, base_url: str) -> dict[str, Any]:
         return {
@@ -124,6 +129,12 @@ class JobStore:
         self.jobs = jobs
         self.output_root = output_root
         self.lock = threading.Lock()
+
+    def add_jobs(self, case_paths: list[pathlib.Path]) -> list[Job]:
+        with self.lock:
+            jobs = build_jobs(case_paths, self.output_root, start_index=len(self.jobs) + 1)
+            self.jobs.extend(jobs)
+            return jobs
 
     def claim_next_job(self, worker_id: str | None) -> Job | None:
         with self.lock:
@@ -211,6 +222,7 @@ class JobStore:
                         "failureReason": job.failure_reason,
                         "outputDir": str(job.output_dir),
                         "latestProgress": job.progress[-1] if job.progress else None,
+                        "mediaAi": public_media_ai(job.media_ai),
                     }
                     for job in self.jobs
                 ]
@@ -221,11 +233,28 @@ def write_json(path: pathlib.Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path) -> list[Job]:
+def public_media_ai(media_ai: dict[str, Any] | None) -> dict[str, Any] | None:
+    if media_ai is None:
+        return None
+    payload = dict(media_ai)
+    if "cookie" in payload:
+        payload["cookie"] = "<redacted>"
+    return payload
+
+
+def load_media_ai_sidecar(case_path: pathlib.Path) -> dict[str, Any] | None:
+    sidecar_path = case_path.with_suffix(".media-ai.json")
+    if not sidecar_path.exists():
+        return None
+    return json.loads(sidecar_path.read_text(encoding="utf-8"))
+
+
+def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_index: int = 1) -> list[Job]:
     jobs: list[Job] = []
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    for index, case_path in enumerate(case_paths, start=1):
+    for index, case_path in enumerate(case_paths, start=start_index):
         prompt, assets = load_case_file(case_path)
+        media_ai = load_media_ai_sidecar(case_path)
         job_id = f"{index:03d}-{sanitize_slug(case_path.stem)}-{timestamp}"
         job_output_dir = output_root / job_id
         jobs.append(
@@ -235,6 +264,7 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path) -> lis
                 prompt=prompt,
                 assets=assets,
                 output_dir=job_output_dir,
+                media_ai=media_ai,
             )
         )
     return jobs
@@ -244,6 +274,114 @@ def parse_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     content_length = int(handler.headers.get("Content-Length", "0"))
     raw_body = handler.rfile.read(content_length) if content_length else b"{}"
     return json.loads(raw_body.decode("utf-8"))
+
+
+def request_json(
+    method: str,
+    url: str,
+    *,
+    cookie: str | None,
+    body: dict[str, Any] | None = None,
+    timeout: int = 120,
+) -> Any:
+    headers = {"Accept": "application/json"}
+    data = None
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    if cookie:
+        headers["Cookie"] = cookie
+
+    request = Request(url, data=data, headers=headers, method=method)
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+            return json.loads(raw) if raw else None
+    except HTTPError as error:
+        raw = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"{method} {url} failed with HTTP {error.code}: {raw}") from error
+    except URLError as error:
+        raise RuntimeError(f"{method} {url} failed: {error.reason}") from error
+
+
+def upload_file_multipart(
+    url: str,
+    *,
+    cookie: str | None,
+    file_path: pathlib.Path,
+    sub_dir: str,
+    timeout: int = 120,
+) -> dict[str, Any]:
+    boundary = f"----codex-{uuid.uuid4().hex}"
+    file_bytes = file_path.read_bytes()
+    mime_type = guess_mime_type(file_path)
+    fields = [
+        (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="subDir"\r\n\r\n'
+            f"{sub_dir}\r\n"
+        ).encode("utf-8"),
+        (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{file_path.name}"\r\n'
+            f"Content-Type: {mime_type}\r\n\r\n"
+        ).encode("utf-8"),
+        file_bytes,
+        f"\r\n--{boundary}--\r\n".encode("utf-8"),
+    ]
+    body = b"".join(fields)
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(body)),
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+
+    request = Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except HTTPError as error:
+        raw = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"POST {url} failed with HTTP {error.code}: {raw}") from error
+    except URLError as error:
+        raise RuntimeError(f"POST {url} failed: {error.reason}") from error
+
+
+def save_media_ai_model_image(job: Job, output_path: pathlib.Path) -> dict[str, Any] | None:
+    if not job.media_ai:
+        return None
+
+    base_url = ensure_text(job.media_ai.get("baseUrl") or "http://localhost:3000").rstrip("/")
+    cookie = ensure_text(job.media_ai.get("cookie") or os.environ.get("MEDIA_AI_COOKIE") or "") or None
+    product_id = ensure_text(job.media_ai.get("productId") or "")
+    ip_id = ensure_text(job.media_ai.get("ipId") or "")
+    sub_dir = ensure_text(job.media_ai.get("uploadSubDir") or "model-images")
+    if not product_id or not ip_id:
+        raise RuntimeError("Media AI sidecar requires productId and ipId.")
+
+    upload_result = upload_file_multipart(
+        f"{base_url}/api/upload",
+        cookie=cookie,
+        file_path=output_path,
+        sub_dir=sub_dir,
+    )
+    image_url = ensure_text(upload_result.get("url") or "")
+    if not image_url:
+        raise RuntimeError(f"Media AI upload response did not include url: {upload_result}")
+
+    save_result = request_json(
+        "POST",
+        f"{base_url}/api/products/{product_id}/model-image/save",
+        cookie=cookie,
+        body={"ipId": ip_id, "imageUrl": image_url},
+    )
+    return {
+        "uploaded": upload_result,
+        "saved": save_result,
+    }
 
 
 def send_json(handler: BaseHTTPRequestHandler, status: int, payload: Any) -> None:
@@ -321,6 +459,40 @@ class RequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if path == "/v1/jobs":
+            payload = parse_json_body(self)
+            raw_paths = payload.get("caseFiles") or payload.get("tasks") or []
+            if not isinstance(raw_paths, list):
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": "caseFiles must be an array"})
+                return
+
+            try:
+                case_paths = resolve_case_paths([ensure_text(item) for item in raw_paths])
+                jobs = self.server.store.add_jobs(case_paths)
+            except Exception as error:
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+
+            print(f"Enqueued {len(jobs)} job(s).", flush=True)
+            for job in jobs:
+                print(f"- {job.id}: {job.case_file}", flush=True)
+            send_json(
+                self,
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "jobs": [
+                        {
+                            "id": job.id,
+                            "caseFile": str(job.case_file),
+                            "mediaAi": public_media_ai(job.media_ai),
+                        }
+                        for job in jobs
+                    ],
+                },
+            )
+            return
+
         heartbeat_match = re.fullmatch(r"/v1/job/([^/]+)/heartbeat", path)
         if heartbeat_match:
             job_id = heartbeat_match.group(1)
@@ -365,6 +537,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
             images = payload.get("images", [])
             saved_files: list[str] = []
+            media_ai_results: list[dict[str, Any]] = []
             skipped_files: list[dict[str, Any]] = []
             asset_hashes = {asset["sha256"] for asset in job.assets}
             for index, image in enumerate(images, start=1):
@@ -387,8 +560,18 @@ class RequestHandler(BaseHTTPRequestHandler):
                 output_path = job.output_dir / output_name
                 output_path.write_bytes(binary)
                 saved_files.append(output_name)
+                if len(saved_files) == 1 and job.media_ai:
+                    try:
+                        media_ai_result = save_media_ai_model_image(job, output_path)
+                        if media_ai_result:
+                            media_ai_results.append(media_ai_result)
+                            print(f"[{job.id}] saved model image to Media AI", flush=True)
+                    except Exception as error:
+                        media_ai_results.append({"error": str(error)})
+                        print(f"[{job.id}] Media AI save failed: {error}", flush=True)
 
-            status = "completed" if saved_files else "failed"
+            media_ai_failed = any("error" in item for item in media_ai_results)
+            status = "failed" if media_ai_failed else ("completed" if saved_files else "failed")
             finished_at = utc_now_iso()
             metadata = {
                 "jobId": job.id,
@@ -399,6 +582,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "finishedAt": finished_at,
                 "savedFiles": saved_files,
                 "skippedFiles": skipped_files,
+                "mediaAi": public_media_ai(job.media_ai),
+                "mediaAiResults": media_ai_results,
                 "inputAssets": [
                     {
                         "label": asset["label"],
@@ -413,13 +598,26 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "logs": job.progress or payload.get("logs", []),
             }
             write_json(job.output_dir / "metadata.json", metadata)
-            if saved_files:
+            if saved_files and not media_ai_failed:
                 self.server.store.mark_completed(job_id)
                 print(f"[{job.id}] saved {len(saved_files)} generated image(s)", flush=True)
-                send_json(self, HTTPStatus.OK, {"ok": True, "savedFiles": saved_files, "skippedFiles": skipped_files})
+                send_json(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "ok": True,
+                        "savedFiles": saved_files,
+                        "skippedFiles": skipped_files,
+                        "mediaAiResults": media_ai_results,
+                    },
+                )
                 return
 
-            reason = "Only input assets were detected; no generated images were saved."
+            reason = (
+                f"Media AI save failed: {media_ai_results}"
+                if media_ai_failed
+                else "Only input assets were detected; no generated images were saved."
+            )
             self.server.store.mark_failed(job_id, reason)
             print(f"[{job.id}] {reason}", flush=True)
             send_json(
@@ -535,7 +733,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser = subparsers.add_parser("serve", help="Start the local task server.")
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8765)
-    serve_parser.add_argument("--task", action="append", required=True, help="Path to a Markdown task file.")
+    serve_parser.add_argument("--task", action="append", default=[], help="Path to a Markdown task file.")
     serve_parser.add_argument("--output-root", default="runs", help="Directory for generated outputs.")
 
     inspect_parser = subparsers.add_parser("inspect", help="Inspect a Markdown task file.")
