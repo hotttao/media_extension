@@ -524,7 +524,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-auto-bridge", action="store_true", help="Do not auto-start local_bridge if unavailable.")
     parser.add_argument("--no-wait", action="store_true", help="Submit tasks and exit without waiting for completion.")
     parser.add_argument("--poll-interval", type=int, default=15)
-    parser.add_argument("--wait-timeout", type=int, default=180, help="Seconds to wait. 0 means no timeout.")
+    parser.add_argument("--wait-timeout", type=int, default=300, help="Seconds to wait. 0 means no timeout.")
     parser.add_argument(
         "--output-root",
         default=f"runs/media-ai-model-image-queue-{datetime.now().strftime('%Y%m%d-%H%M%S')}",

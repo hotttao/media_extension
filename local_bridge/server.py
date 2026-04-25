@@ -350,17 +350,17 @@ def upload_file_multipart(
         raise RuntimeError(f"POST {url} failed: {error.reason}") from error
 
 
-def save_media_ai_model_image(job: Job, output_path: pathlib.Path) -> dict[str, Any] | None:
+def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[str, Any] | None:
     if not job.media_ai:
         return None
 
     base_url = ensure_text(job.media_ai.get("baseUrl") or "http://localhost:3000").rstrip("/")
     cookie = ensure_text(job.media_ai.get("cookie") or os.environ.get("MEDIA_AI_COOKIE") or "") or None
+    kind = ensure_text(job.media_ai.get("kind") or "model-image")
     product_id = ensure_text(job.media_ai.get("productId") or "")
-    ip_id = ensure_text(job.media_ai.get("ipId") or "")
-    sub_dir = ensure_text(job.media_ai.get("uploadSubDir") or "model-images")
-    if not product_id or not ip_id:
-        raise RuntimeError("Media AI sidecar requires productId and ipId.")
+    sub_dir = ensure_text(job.media_ai.get("uploadSubDir") or f"{kind}s")
+    if not product_id:
+        raise RuntimeError("Media AI sidecar requires productId.")
 
     upload_result = upload_file_multipart(
         f"{base_url}/api/upload",
@@ -372,13 +372,28 @@ def save_media_ai_model_image(job: Job, output_path: pathlib.Path) -> dict[str, 
     if not image_url:
         raise RuntimeError(f"Media AI upload response did not include url: {upload_result}")
 
-    save_result = request_json(
-        "POST",
-        f"{base_url}/api/products/{product_id}/model-image/save",
-        cookie=cookie,
-        body={"ipId": ip_id, "imageUrl": image_url},
-    )
+    if kind == "style-image":
+        model_image_id = ensure_text(job.media_ai.get("modelImageId") or "")
+        if not model_image_id:
+            raise RuntimeError("Media AI style-image sidecar requires modelImageId.")
+        save_body = {
+            "modelImageId": model_image_id,
+            "poseId": job.media_ai.get("poseId"),
+            "makeupId": job.media_ai.get("makeupId"),
+            "accessoryId": job.media_ai.get("accessoryId"),
+            "imageUrl": image_url,
+        }
+        save_url = f"{base_url}/api/products/{product_id}/style-image/save"
+    else:
+        ip_id = ensure_text(job.media_ai.get("ipId") or "")
+        if not ip_id:
+            raise RuntimeError("Media AI model-image sidecar requires ipId.")
+        save_body = {"ipId": ip_id, "imageUrl": image_url}
+        save_url = f"{base_url}/api/products/{product_id}/model-image/save"
+
+    save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
     return {
+        "kind": kind,
         "uploaded": upload_result,
         "saved": save_result,
     }
@@ -562,7 +577,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 saved_files.append(output_name)
                 if len(saved_files) == 1 and job.media_ai:
                     try:
-                        media_ai_result = save_media_ai_model_image(job, output_path)
+                        media_ai_result = save_media_ai_generated_image(job, output_path)
                         if media_ai_result:
                             media_ai_results.append(media_ai_result)
                             print(f"[{job.id}] saved model image to Media AI", flush=True)
