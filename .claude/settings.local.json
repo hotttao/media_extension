@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(git checkout:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(curl -s \"http://localhost:3000/api/products/040e2561-6cab-4e98-99c1-47c16861cf07/style-images\" -H \"Cookie: $MEDIA_AI_COOKIE\")",
+      "Skill(context:prime)"
     ]
   }
 }

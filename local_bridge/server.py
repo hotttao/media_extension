@@ -181,6 +181,18 @@ class JobStore:
             job.worker_id = None
             return job
 
+    def cancel(self, job_id: str) -> Job:
+        with self.lock:
+            job = self.get_job_or_raise(job_id)
+            if job.status == "running":
+                raise RuntimeError("Running jobs cannot be canceled from the local bridge.")
+            if job.status in {"completed", "failed"}:
+                raise RuntimeError(f"Terminal job cannot be canceled: {job.status}")
+            job.status = "canceled"
+            job.finished_at = utc_now_iso()
+            job.failure_reason = "canceled"
+            return job
+
     def heartbeat(self, job_id: str) -> Job:
         with self.lock:
             job = self.get_job_or_raise(job_id)
@@ -697,6 +709,20 @@ class RequestHandler(BaseHTTPRequestHandler):
                 job = self.server.store.requeue(job_id)
             except KeyError:
                 send_json(self, HTTPStatus.NOT_FOUND, {"error": "job_not_found"})
+                return
+            send_json(self, HTTPStatus.OK, {"ok": True, "jobId": job.id, "status": job.status})
+            return
+
+        cancel_match = re.fullmatch(r"/v1/job/([^/]+)/cancel", path)
+        if cancel_match:
+            job_id = cancel_match.group(1)
+            try:
+                job = self.server.store.cancel(job_id)
+            except KeyError:
+                send_json(self, HTTPStatus.NOT_FOUND, {"error": "job_not_found"})
+                return
+            except RuntimeError as error:
+                send_json(self, HTTPStatus.CONFLICT, {"error": str(error)})
                 return
             send_json(self, HTTPStatus.OK, {"ok": True, "jobId": job.id, "status": job.status})
             return
