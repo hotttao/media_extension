@@ -183,6 +183,48 @@ python scripts/submit_media_ai_style_images.py --product-id 12345 --pose-ids-fil
 python scripts/submit_media_ai_style_images.py --no-wait
 ```
 
+### submit_media_ai_first_frame_images.py
+
+提交首帧图任务到 GPT 图片队列。将模特定妆照放置到不同场景中生成首帧图。
+
+```
+python scripts/submit_media_ai_first_frame_images.py [参数]
+```
+
+**专用参数：**
+
+| 参数 | 说明 |
+|------|------|
+| `--prompt-file` | 提示词文件（默认 `prompts/05_首帧图.md`） |
+| `--product-id` | 产品 ID 筛选，可多次指定 |
+| `--product-ids-file` | 产品 ID 列表文件 |
+| `--ip-id` | 虚拟 IP ID 筛选 |
+| `--style-image-id` | 定妆图 ID 筛选，可多次指定 |
+| `--scene-id` | 场景 ID 筛选，可多次指定 |
+| `--scene-ids-file` | 场景 ID 列表文件 |
+| `--target-audience` | 目标受众筛选 |
+| `--search` | 从 `/api/products` 搜索的关键词 |
+| `--limit` | 最多检查的产品数量 |
+| `--scene-limit` | 最多选择的场景数量 |
+| `--frames-per-style` | 每个定妆图生成的首帧图数量（默认 5） |
+| `--upload-subdir` | 上传子目录 |
+
+**示例：**
+
+```powershell
+# 使用环境变量登录，为所有产品生成首帧图（每个定妆照5个场景）
+python scripts/submit_media_ai_first_frame_images.py --env-file .env
+
+# 指定产品ID和场景数量
+python scripts/submit_media_ai_first_frame_images.py --product-id 12345 --scene-limit 10
+
+# 每个定妆图生成3个首帧图
+python scripts/submit_media_ai_first_frame_images.py --frames-per-style 3
+
+# 仅准备任务文件，不提交
+python scripts/submit_media_ai_first_frame_images.py --prepare-only
+```
+
 ## 更新 skills
 
 ```powershell

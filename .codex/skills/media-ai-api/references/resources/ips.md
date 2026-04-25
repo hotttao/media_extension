@@ -8,5 +8,7 @@
 | GET | `/api/ips/{id}` | GET ips id | [View](../operations/getIpsId.md) |
 | PUT | `/api/ips/{id}` | PUT ips id | [View](../operations/putIpsId.md) |
 | DELETE | `/api/ips/{id}` | DELETE ips id | [View](../operations/deleteIpsId.md) |
+| GET | `/api/ips/{id}/scenes` | GET ips id scenes | [View](../operations/getIpsIdScenes.md) |
+| PUT | `/api/ips/{id}/scenes` | PUT ips id scenes | [View](../operations/putIpsIdScenes.md) |
 | GET | `/api/ips` | GET ips | [View](../operations/getIps.md) |
 | POST | `/api/ips` | POST ips | [View](../operations/postIps.md) |

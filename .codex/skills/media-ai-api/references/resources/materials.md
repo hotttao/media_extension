@@ -6,6 +6,7 @@
 |--------|------|---------|----------|
 | GET | `/api/materials/{id}` | GET materials id | [View](../operations/getMaterialsId.md) |
 | DELETE | `/api/materials/{id}` | DELETE materials id | [View](../operations/deleteMaterialsId.md) |
+| PATCH | `/api/materials/{id}` | PATCH materials id | [View](../operations/patchMaterialsId.md) |
 | POST | `/api/materials/extract` | POST materials extract | [View](../operations/postMaterialsExtract.md) |
 | GET | `/api/materials/ip/{ipId}` | GET materials ip ipId | [View](../operations/getMaterialsIpIpId.md) |
 | POST | `/api/materials/ip/{ipId}` | POST materials ip ipId | [View](../operations/postMaterialsIpIpId.md) |
