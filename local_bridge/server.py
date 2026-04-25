@@ -384,6 +384,17 @@ def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[s
             "imageUrl": image_url,
         }
         save_url = f"{base_url}/api/products/{product_id}/style-image/save"
+    elif kind == "first-frame-image":
+        style_image_id = ensure_text(job.media_ai.get("styleImageId") or "")
+        if not style_image_id:
+            raise RuntimeError("Media AI first-frame sidecar requires styleImageId.")
+        save_body = {
+            "styleImageId": style_image_id,
+            "sceneId": job.media_ai.get("sceneId"),
+            "composition": job.media_ai.get("composition"),
+            "imageUrl": image_url,
+        }
+        save_url = f"{base_url}/api/products/{product_id}/first-frame"
     else:
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
         if not ip_id:
@@ -580,7 +591,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         media_ai_result = save_media_ai_generated_image(job, output_path)
                         if media_ai_result:
                             media_ai_results.append(media_ai_result)
-                            print(f"[{job.id}] saved model image to Media AI", flush=True)
+                            print(f"[{job.id}] saved generated image to Media AI", flush=True)
                     except Exception as error:
                         media_ai_results.append({"error": str(error)})
                         print(f"[{job.id}] Media AI save failed: {error}", flush=True)
