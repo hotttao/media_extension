@@ -1,4 +1,6 @@
 runs/
 __pycache__/
+.venv/
 
 .env
+docs/feishu
