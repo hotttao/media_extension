@@ -10,8 +10,314 @@
 ## 目录结构
 
 - `local_bridge/server.py`：本地任务服务
+- `local_bridge/media_ai_client.py`：Media AI API 客户端
 - `extension/`：Chrome 扩展
-- `test_case/模特图.md`：当前测试用例
+- `prompts/`：提示词模板
+- `logs/`：运行时日志（git 忽略）
+- `runs/`：任务输出结果
+
+## 启动本地服务
+
+```bash
+python -m local_bridge.server serve --host 127.0.0.1 --port 8765
+```
+
+- 默认监听 `http://127.0.0.1:8765`
+- 日志输出到 `logs/server.log`（默认 DEBUG 级别）
+- 任务结果保存到 `runs/` 目录
+
+**环境变量：**
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `LOG_LEVEL` | `DEBUG` | 日志级别（DEBUG/INFO/WARNING/ERROR） |
+| `MEDIA_AI_BASE_URL` | `http://localhost:3000` | Media AI API 地址 |
+| `MEDIA_AI_MEDIA_BASE_URL` | `http://192.168.2.38` | Media AI 媒体文件服务器地址 |
+
+**命令参数：**
+
+| 参数 | 说明 |
+|------|------|
+| `--host` | 监听地址（默认 `127.0.0.1`） |
+| `--port` | 监听端口（默认 `8765`） |
+| `--task` | 初始任务文件，可多次指定 |
+| `--output-root` | 输出目录（默认 `runs`） |
+
+## API 接口
+
+### GET /health
+
+健康检查。
+
+**响应：**
+```json
+{ “ok”: true, “now”: “2026-04-28T12:00:00.000Z” }
+```
+
+### GET /v1/state
+
+获取所有任务状态。
+
+**响应：**
+```json
+{
+  “jobs”: [
+    {
+      “id”: “001-task-20260428-120000”,
+      “caseFile”: “D:\\...\\task.md”,
+      “status”: “pending”,
+      “createdAt”: “...”,
+      “claimedAt”: null,
+      “finishedAt”: null,
+      “failureReason”: null,
+      “outputDir”: “runs/001-task-20260428-120000”,
+      “latestProgress”: { “at”: “...”, “message”: “...” },
+      “mediaAi”: { “kind”: “model-image”, ... }
+    }
+  ]
+}
+```
+
+### GET /v1/job/claim
+
+从队列认领一个任务。
+
+**请求头：** `X-Worker-Id: worker-1`（可选）
+
+**响应：**
+```json
+{
+  “job”: {
+    “id”: “001-task-20260428-120000”,
+    “caseFile”: “D:\\...\\task.md”,
+    “prompt”: “# 产品名 / IP名 模特图\n\n[图片一：...](assets/model-reference.png)\n[图片二：...](assets/product-main.png)\n\n请根据参考图生成...”,
+    “assets”: [
+      {
+        “index”: 0,
+        “label”: “参考图”,
+        “name”: “model-reference.png”,
+        “mimeType”: “image/png”,
+        “url”: “http://127.0.0.1:8765/v1/assets/001-task-20260428-120000/0”
+      }
+    ],
+    “timeoutSeconds”: 900
+  }
+}
+```
+
+### GET /v1/assets/{jobId}/{index}
+
+获取任务资产（图片）。
+
+**响应：** 图片二进制数据。
+
+### POST /v1/jobs
+
+批量提交任务。
+
+**请求体：**
+```json
+{
+  “caseFiles”: [“D:\\path\\to\\task.md”]
+}
+```
+
+**响应：**
+```json
+{
+  “ok”: true,
+  “jobs”: [
+    { “id”: “001-task-20260428-120000”, “caseFile”: “...”, “mediaAi”: {...} }
+  ]
+}
+```
+
+### POST /v1/job/{id}/heartbeat
+
+更新任务心跳。
+
+**响应：** `{ “ok”: true, “jobId”: “001-task-20260428-120000” }`
+
+### POST /v1/job/{id}/progress
+
+更新任务进度。
+
+**请求体：**
+```json
+{ “message”: “正在上传图片...”, “at”: “2026-04-28T12:00:00Z”, “details”: {} }
+```
+
+**响应：** `{ “ok”: true }`
+
+### POST /v1/job/{id}/result
+
+提交任务结果图片。
+
+**请求体：**
+```json
+{
+  “images”: [
+    { “base64Data”: “...”, “filename”: “result-01.png” },
+    { “base64Data”: “...”, “filename”: “result-02.png” }
+  ],
+  “assistantResponse”: “生成完成”,
+  “logs”: []
+}
+```
+
+**响应：**
+```json
+{
+  “ok”: true,
+  “savedFiles”: [“result-01.png”, “result-02.png”],
+  “skippedFiles”: [],
+  “mediaAiResults”: [{ “kind”: “style-image”, “uploaded”: {...}, “saved”: {...} }]
+}
+```
+
+### POST /v1/job/{id}/fail
+
+标记任务失败。
+
+**请求体：**
+```json
+{ “reason”: “超时” }
+```
+
+**响应：** `{ “ok”: true }`
+
+### POST /v1/job/{id}/requeue
+
+重新排队任务。
+
+**响应：** `{ “ok”: true, “jobId”: “...”, “status”: “pending” }`
+
+### POST /v1/job/{id}/cancel
+
+取消任务。
+
+**响应：** `{ “ok”: true, “jobId”: “...”, “status”: “canceled” }`
+
+### POST /v1/jobs/cancel
+
+取消所有 pending 状态的任务。
+
+**响应：**
+```json
+{
+  “ok”: true,
+  “canceled”: [
+    { “jobId”: “001-task-20260428-120000”, “status”: “canceled” },
+    { “jobId”: “002-task-20260428-120001”, “status”: “canceled” }
+  ]
+}
+```
+
+### POST /v1/single/model-image
+
+创建模特图任务。
+
+**请求体：**
+```json
+{
+  “productId”: “3813528280213094793”,
+  “ipId”: “981cd79c-5973-429a-8edf-dff3eda45014”,
+  “force”: false
+}
+```
+
+或仅提供 `modelImageId`（自动解析 productId 和 ipId）：
+
+```json
+{
+  “modelImageId”: “309d6c4c-19a3-46f0-9317-a60e1ee21cf7”,
+  “force”: false
+}
+```
+
+**响应：**
+```json
+{
+  “ok”: true,
+  “job”: {
+    “id”: “001-task-20260428-120000”,
+    “caseFile”: “runs/.../task.md”,
+    “mediaAi”: {
+      “kind”: “model-image”,
+      “productId”: “3813528280213094793”,
+      “productName”: “2026夏季新款女韩系穿搭...”,
+      “ipId”: “981cd79c-5973-429a-8edf-dff3eda45014”,
+      “productMainImageUrl”: “http://192.168.2.38/...”
+    }
+  }
+}
+```
+
+### POST /v1/single/style-image
+
+创建定妆图任务。
+
+**请求体：**
+```json
+{
+  “modelImageId”: “309d6c4c-19a3-46f0-9317-a60e1ee21cf7”,
+  “poseId”: “4df51547-928f-44b6-ad5a-0f7807c0106c”,
+  “force”: false
+}
+```
+
+**响应：**
+```json
+{
+  “ok”: true,
+  “job”: {
+    “id”: “001-task-20260428-120000”,
+    “caseFile”: “runs/.../task.md”,
+    “mediaAi”: {
+      “kind”: “style-image”,
+      “modelImageId”: “309d6c4c-...”,
+      “poseId”: “4df51547-...”,
+      “poseName”: “举手机自拍”,
+      ...
+    }
+  }
+}
+```
+
+### POST /v1/single/first-frame-image
+
+创建首帧图任务。
+
+**请求体：**
+```json
+{
+  “styleImageId”: “d54f8c2a-9c13-4a7e-b8e1-4f3a2b1c5d4e”,
+  “sceneId”: “3d30e5eb-292d-4574-95f6-abb25e00fc6c”,
+  “force”: false
+}
+```
+
+**响应：**
+```json
+{
+  “ok”: true,
+  “job”: {
+    “id”: “001-task-20260428-120000”,
+    “caseFile”: “runs/.../task.md”,
+    “mediaAi”: { “kind”: “first-frame-image”, ... }
+  }
+}
+```
+
+## 输出结果
+
+每个任务会在 `runs/<job-id>/` 下生成：
+
+- `prompt.md`：实际发送的提示词
+- `metadata.json`：任务元信息
+- `logs.json`：每一步进度日志，包含 assistant 回复节点信息和图片源 URL
+- `result-01.png` 等：抓取到的生成结果
+- `failure.json`：如果任务失败，会记录失败原因
 
 ## 运行前提
 
@@ -33,8 +339,8 @@ python local_bridge\server.py serve --task test_case\模特图.md
 ### 2. 安装扩展
 
 1. 打开 `chrome://extensions`
-2. 开启右上角“开发者模式”
-3. 点击“加载已解压的扩展程序”
+2. 开启右上角”开发者模式”
+3. 点击”加载已解压的扩展程序”
 4. 选择当前项目里的 `extension` 目录
 
 ### 3. 执行任务
@@ -53,16 +359,6 @@ python local_bridge\server.py serve --task test_case\模特图.md
 - 发送请求
 - 等待生成完成
 - 把结果图片回传给本地服务保存
-
-## 输出结果
-
-每个任务会在 `runs/<job-id>/` 下生成：
-
-- `prompt.md`：实际发送的提示词
-- `metadata.json`：任务元信息
-- `logs.json`：每一步进度日志，包含 assistant 回复节点信息和图片源 URL
-- `result-01.png` 等：抓取到的生成结果
-- `failure.json`：如果任务失败，会记录失败原因
 
 ## 当前限制
 
@@ -116,7 +412,7 @@ python scripts/submit_media_ai_model_images.py [参数]
 
 | 参数 | 说明 |
 |------|------|
-| `--prompt-file` | 提示词文件（默认 `prompts/04_定妆图.md`） |
+| `--prompt-file` | 提示词文件（默认 `prompts/03_模特图.md`） |
 | `--ip-id` | 虚拟 IP ID 筛选，可多次指定 |
 | `--product-id` | 产品 ID 筛选，可多次指定 |
 | `--product-ids-file` | 产品 ID 列表文件（每行一个 ID，或 JSON 数组） |
@@ -140,7 +436,7 @@ python scripts/submit_media_ai_model_images.py --prepare-only
 python scripts/submit_media_ai_model_images.py --no-wait
 
 # 指定产品ID，搜索特定产品
-python scripts/submit_media_ai_model_images.py --search "T恤" --limit 10
+python scripts/submit_media_ai_model_images.py --search “T恤” --limit 10
 
 # 设置更长的等待超时（5分钟）
 python scripts/submit_media_ai_model_images.py --wait-timeout 300

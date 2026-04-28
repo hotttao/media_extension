@@ -22,6 +22,8 @@ from submit_media_ai_model_images import (
     slugify,
     wait_for_jobs,
 )
+from local_bridge.media_ai_client import MediaAIClient
+from local_bridge.single_task import _scene_key as scene_key
 
 
 DEFAULT_PROMPT_FILE = pathlib.Path("prompts/05_首帧图.md")
@@ -223,77 +225,77 @@ def existing_first_frames(
     return []
 
 
-def build_task_file(
-    *,
-    args: argparse.Namespace,
-    cookie: str | None,
-    prompt: str,
-    style_image: dict[str, Any],
-    ip: dict[str, Any],
-    scene: dict[str, Any],
-    output_root: pathlib.Path,
-) -> pathlib.Path | None:
-    base_url = args.base_url.rstrip("/")
-    product_id = str(style_image.get("productId") or "")
-    product_name = str(style_image.get("productName") or product_id)
-    ip_id = str(style_image.get("ipId") or ip.get("id") or "")
-    style_image_id = str(style_image.get("id") or "")
-    style_image_url = str(style_image.get("url") or "")
-    scene_id = scene_key(scene)
-    current_scene_name = scene_name(scene)
-    current_scene_url = scene_url(scene)
-
-    if not product_id or not ip_id or not style_image_id or not style_image_url or not scene_id or not current_scene_url:
-        return None
-
-    task_dir = output_root / (
-        f"{slugify(product_name)}-{product_id[:8]}__"
-        f"style-{style_image_id[:8]}__"
-        f"scene-{slugify(current_scene_name)}-{scene_id[:8]}"
-    )
-    assets_dir = task_dir / "assets"
-    assets_dir.mkdir(parents=True, exist_ok=True)
-
-    style_media_url = resolve_media_url(base_url, style_image_url)
-    scene_media_url = resolve_media_url(base_url, current_scene_url)
-    style_path = assets_dir / f"style-image{extension_from_url(style_media_url)}"
-    scene_path = assets_dir / f"scene-reference{extension_from_url(scene_media_url)}"
-    download_file(style_media_url, style_path, cookie=cookie, timeout=args.timeout)
-    download_file(scene_media_url, scene_path, cookie=cookie, timeout=args.timeout)
-
-    lines = [
-        f"# {product_name} / style-{style_image_id[:8]} / {current_scene_name} 首帧图",
-        "",
-        f"[图片一：模特定妆照]({style_path.relative_to(task_dir).as_posix()})",
-        f"[图片二：场景]({scene_path.relative_to(task_dir).as_posix()})",
-        "",
-        prompt,
-        "",
-    ]
-    case_path = task_dir / "task.md"
-    case_path.write_text("\n".join(lines), encoding="utf-8")
-
-    sidecar: dict[str, Any] = {
-        "kind": "first-frame-image",
-        "baseUrl": base_url,
-        "productId": product_id,
-        "productName": product_name,
-        "ipId": ip_id,
-        "ipNickname": ip.get("nickname"),
-        "styleImageId": style_image_id,
-        "styleImageUrl": style_media_url,
-        "sceneId": scene_id,
-        "sceneName": current_scene_name,
-        "sceneUrl": scene_media_url,
-        "uploadSubDir": args.upload_subdir,
-    }
-    if not args.no_embed_cookie and cookie:
-        sidecar["cookie"] = cookie
-    case_path.with_suffix(".media-ai.json").write_text(
-        json.dumps(sidecar, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    return case_path.resolve()
+# def build_task_file(
+#     *,
+#     args: argparse.Namespace,
+#     cookie: str | None,
+#     prompt: str,
+#     style_image: dict[str, Any],
+#     ip: dict[str, Any],
+#     scene: dict[str, Any],
+#     output_root: pathlib.Path,
+# ) -> pathlib.Path | None:
+#     base_url = args.base_url.rstrip("/")
+#     product_id = str(style_image.get("productId") or "")
+#     product_name = str(style_image.get("productName") or product_id)
+#     ip_id = str(style_image.get("ipId") or ip.get("id") or "")
+#     style_image_id = str(style_image.get("id") or "")
+#     style_image_url = str(style_image.get("url") or "")
+#     scene_id = scene_key(scene)
+#     current_scene_name = scene_name(scene)
+#     current_scene_url = scene_url(scene)
+#
+#     if not product_id or not ip_id or not style_image_id or not style_image_url or not scene_id or not current_scene_url:
+#         return None
+#
+#     task_dir = output_root / (
+#         f"{slugify(product_name)}-{product_id[:8]}__"
+#         f"style-{style_image_id[:8]}__"
+#         f"scene-{slugify(current_scene_name)}-{scene_id[:8]}"
+#     )
+#     assets_dir = task_dir / "assets"
+#     assets_dir.mkdir(parents=True, exist_ok=True)
+#
+#     style_media_url = resolve_media_url(base_url, style_image_url)
+#     scene_media_url = resolve_media_url(base_url, current_scene_url)
+#     style_path = assets_dir / f"style-image{extension_from_url(style_media_url)}"
+#     scene_path = assets_dir / f"scene-reference{extension_from_url(scene_media_url)}"
+#     download_file(style_media_url, style_path, cookie=cookie, timeout=args.timeout)
+#     download_file(scene_media_url, scene_path, cookie=cookie, timeout=args.timeout)
+#
+#     lines = [
+#         f"# {product_name} / style-{style_image_id[:8]} / {current_scene_name} 首帧图",
+#         "",
+#         f"[图片一：模特定妆照]({style_path.relative_to(task_dir).as_posix()})",
+#         f"[图片二：场景]({scene_path.relative_to(task_dir).as_posix()})",
+#         "",
+#         prompt,
+#         "",
+#     ]
+#     case_path = task_dir / "task.md"
+#     case_path.write_text("\n".join(lines), encoding="utf-8")
+#
+#     sidecar: dict[str, Any] = {
+#         "kind": "first-frame-image",
+#         "baseUrl": base_url,
+#         "productId": product_id,
+#         "productName": product_name,
+#         "ipId": ip_id,
+#         "ipNickname": ip.get("nickname"),
+#         "styleImageId": style_image_id,
+#         "styleImageUrl": style_media_url,
+#         "sceneId": scene_id,
+#         "sceneName": current_scene_name,
+#         "sceneUrl": scene_media_url,
+#         "uploadSubDir": args.upload_subdir,
+#     }
+#     if not args.no_embed_cookie and cookie:
+#         sidecar["cookie"] = cookie
+#     case_path.with_suffix(".media-ai.json").write_text(
+#         json.dumps(sidecar, ensure_ascii=False, indent=2),
+#         encoding="utf-8",
+#     )
+#     return case_path.resolve()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -337,6 +339,8 @@ def main() -> int:
     base_url = args.base_url.rstrip("/")
     output_root = pathlib.Path(args.output_root)
     output_root.mkdir(parents=True, exist_ok=True)
+
+    client = MediaAIClient(base_url=base_url, cookie=cookie, timeout=args.timeout)
 
     wanted_scene_ids = set(args.scene_id or [])
     if args.scene_ids_file:
@@ -401,13 +405,7 @@ def main() -> int:
             print(f"[SKIP] {style_image_id} has no usable scene intersection.")
             continue
 
-        existing = existing_first_frames(
-            base_url,
-            product_id,
-            style_image_id,
-            cookie=cookie,
-            timeout=args.timeout,
-        )
+        existing = client.existing_first_frames(product_id, style_image_id)
         existing_scene_ids = {str(item.get("sceneId") or "") for item in existing}
 
         for scene in chosen_scenes:
@@ -428,14 +426,12 @@ def main() -> int:
                 print(f"[SKIP] {style_image_id} / {current_scene_id} {current_scene_name} already has first frame.")
                 continue
 
-            case_path = build_task_file(
-                args=args,
-                cookie=cookie,
-                prompt=prompt,
-                style_image=style_image,
-                ip=ip_cache[ip_id],
-                scene=scene,
+            case_path, _ = client.build_first_frame_task(
+                style_image_id=style_image_id,
+                scene_id=current_scene_id,
                 output_root=output_root,
+                prompt=prompt,
+                force=True,
             )
             if not case_path:
                 skipped.append(

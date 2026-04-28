@@ -4,10 +4,12 @@ import argparse
 import base64
 import hashlib
 import json
+import logging
 import mimetypes
 import os
 import pathlib
 import re
+import sys
 import threading
 import time
 import uuid
@@ -21,7 +23,52 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
+from local_bridge.media_ai_client import MediaAIClient
+
+
+MEDIA_AI_BASE_URL = os.environ.get("MEDIA_AI_BASE_URL", "http://localhost:3000")
+MEDIA_AI_MEDIA_BASE_URL = os.environ.get("MEDIA_AI_MEDIA_BASE_URL", "http://192.168.2.38")
+
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+# ---------------------------------------------------------------------------
+# Structured Logging
+# ---------------------------------------------------------------------------
+
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG").upper()
+_LOG_DIR = pathlib.Path("logs")
+_LOG_DIR.mkdir(exist_ok=True)
+_logger = logging.getLogger("local_bridge")
+_logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+_logger.handlers.clear()
+_fh = logging.FileHandler(_LOG_DIR / "server.log", encoding="utf-8")
+_fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
+_logger.addHandler(_fh)
+
+
+def _log(level: int, msg: str, *args: Any, **kwargs: Any) -> None:
+    extra: dict[str, Any] = {}
+    for k, v in kwargs.items():
+        extra[f"extra_{k}"] = v
+    formatted = msg % args if args else msg
+    _logger.log(level, formatted, extra=extra if extra else None)
+
+
+def log_info(msg: str, *args: Any, **kwargs: Any) -> None:
+    _log(logging.INFO, msg, *args, **kwargs)
+
+
+def log_debug(msg: str, *args: Any, **kwargs: Any) -> None:
+    _log(logging.DEBUG, msg, *args, **kwargs)
+
+
+def log_error(msg: str, *args: Any, **kwargs: Any) -> None:
+    _log(logging.ERROR, msg, *args, **kwargs)
+
+
+def log_warning(msg: str, *args: Any, **kwargs: Any) -> None:
+    _log(logging.WARNING, msg, *args, **kwargs)
 
 
 def utc_now_iso() -> str:
@@ -192,6 +239,17 @@ class JobStore:
             job.finished_at = utc_now_iso()
             job.failure_reason = "canceled"
             return job
+
+    def cancel_all(self) -> list[Job]:
+        with self.lock:
+            canceled = []
+            for job in self.jobs:
+                if job.status == "pending":
+                    job.status = "canceled"
+                    job.finished_at = utc_now_iso()
+                    job.failure_reason = "canceled"
+                    canceled.append(job)
+            return canceled
 
     def heartbeat(self, job_id: str) -> Job:
         with self.lock:
@@ -438,13 +496,14 @@ class AppServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], handler_class: type[BaseHTTPRequestHandler], store: JobStore):
         super().__init__(server_address, handler_class)
         self.store = store
+        self.media_ai_client = MediaAIClient(base_url=MEDIA_AI_BASE_URL, media_base_url=MEDIA_AI_MEDIA_BASE_URL)
 
 
 class RequestHandler(BaseHTTPRequestHandler):
     server: AppServer
 
     def log_message(self, format: str, *args: Any) -> None:
-        return
+        log_debug("HTTP %s", format % args)
 
     def do_OPTIONS(self) -> None:
         send_json(self, HTTPStatus.NO_CONTENT, {})
@@ -466,7 +525,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             base_url = f"http://{host}"
             job = self.server.store.claim_next_job(worker_id)
             if job:
-                print(f"[{job.id}] claimed by {worker_id or 'unknown-worker'}", flush=True)
+                log_info("job claimed job_id=%s worker_id=%s", job.id, worker_id or "unknown")
             send_json(self, HTTPStatus.OK, {"job": job.to_public_dict(base_url) if job else None})
             return
 
@@ -496,6 +555,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
+        log_debug("do_POST path=%s", path)
 
         if path == "/v1/jobs":
             payload = parse_json_body(self)
@@ -511,9 +571,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 send_json(self, HTTPStatus.BAD_REQUEST, {"error": str(error)})
                 return
 
-            print(f"Enqueued {len(jobs)} job(s).", flush=True)
+            log_info("enqueued job_count=%d", len(jobs))
             for job in jobs:
-                print(f"- {job.id}: {job.case_file}", flush=True)
+                log_info("  job_id=%s case_file=%s", job.id, job.case_file)
             send_json(
                 self,
                 HTTPStatus.OK,
@@ -555,7 +615,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             at = payload.get("at")
             details = payload.get("details")
             updated_job = self.server.store.add_progress(job_id, message, at=at, details=details)
-            print(f"[{updated_job.id}] {message}", flush=True)
+            log_info("progress job_id=%s message=%s", updated_job.id, message)
             send_json(self, HTTPStatus.OK, {"ok": True})
             return
 
@@ -603,10 +663,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                         media_ai_result = save_media_ai_generated_image(job, output_path)
                         if media_ai_result:
                             media_ai_results.append(media_ai_result)
-                            print(f"[{job.id}] saved generated image to Media AI", flush=True)
+                            log_info("saved generated image to Media AI job_id=%s", job.id)
                     except Exception as error:
                         media_ai_results.append({"error": str(error)})
-                        print(f"[{job.id}] Media AI save failed: {error}", flush=True)
+                        log_error("Media AI save failed job_id=%s error=%s", job.id, error)
 
             media_ai_failed = any("error" in item for item in media_ai_results)
             status = "failed" if media_ai_failed else ("completed" if saved_files else "failed")
@@ -638,7 +698,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             write_json(job.output_dir / "metadata.json", metadata)
             if saved_files and not media_ai_failed:
                 self.server.store.mark_completed(job_id)
-                print(f"[{job.id}] saved {len(saved_files)} generated image(s)", flush=True)
+                log_info("saved generated images job_id=%s count=%s", job.id, len(saved_files))
                 send_json(
                     self,
                     HTTPStatus.OK,
@@ -657,7 +717,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 else "Only input assets were detected; no generated images were saved."
             )
             self.server.store.mark_failed(job_id, reason)
-            print(f"[{job.id}] {reason}", flush=True)
+            log_error("job failed job_id=%s reason=%s", job.id, reason)
             send_json(
                 self,
                 HTTPStatus.OK,
@@ -698,7 +758,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 },
             )
             self.server.store.mark_failed(job_id, reason)
-            print(f"[{job.id}] failed: {reason}", flush=True)
+            log_error("job failed job_id=%s reason=%s", job.id, reason)
             send_json(self, HTTPStatus.OK, {"ok": True})
             return
 
@@ -713,6 +773,21 @@ class RequestHandler(BaseHTTPRequestHandler):
             send_json(self, HTTPStatus.OK, {"ok": True, "jobId": job.id, "status": job.status})
             return
 
+        if path == "/v1/jobs/cancel":
+            canceled = self.server.store.cancel_all()
+            log_info("canceled %d job(s)", len(canceled))
+            send_json(
+                self,
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "canceled": [
+                        {"jobId": job.id, "status": job.status} for job in canceled
+                    ],
+                },
+            )
+            return
+
         cancel_match = re.fullmatch(r"/v1/job/([^/]+)/cancel", path)
         if cancel_match:
             job_id = cancel_match.group(1)
@@ -725,6 +800,247 @@ class RequestHandler(BaseHTTPRequestHandler):
                 send_json(self, HTTPStatus.CONFLICT, {"error": str(error)})
                 return
             send_json(self, HTTPStatus.OK, {"ok": True, "jobId": job.id, "status": job.status})
+            return
+
+        # ---- Single model-image endpoint ----------------------------------------
+        model_image_match = re.fullmatch(r"/v1/single/model-image", path)
+        if model_image_match:
+            log_info(">>> POST /v1/single/model-image")
+            log_debug("media_base_url=%s", self.server.media_ai_client.media_base_url)
+            cookie_header = self.headers.get("Cookie")
+            client = self.server.media_ai_client
+            cookie = client.resolve_cookie(cookie_header)
+            log_debug("has_session_token=%s", "session-token" in (cookie or ""))
+
+            payload = parse_json_body(self)
+            model_image_id = payload.get("modelImageId")
+            product_id = payload.get("productId")
+            ip_id = payload.get("ipId")
+            force = bool(payload.get("force", False))
+            log_info("request modelImageId=%s productId=%s ipId=%s force=%s", model_image_id, product_id, ip_id, force)
+
+            if not model_image_id and not (product_id and ip_id):
+                log_error("missing required params")
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": "modelImageId or (productId + ipId) is required"})
+                return
+
+            # If only modelImageId is provided, fetch it to resolve productId and ipId
+            if model_image_id and not (product_id and ip_id):
+                log_debug("resolving productId/ipId from modelImageId=%s", model_image_id)
+                model_image = client.fetch_model_image(str(model_image_id))
+                if not model_image:
+                    log_error("modelImage not found id=%s", model_image_id)
+                    send_json(self, HTTPStatus.NOT_FOUND, {"error": f"modelImage {model_image_id} not found"})
+                    return
+                product_id = model_image.get("productId")
+                ip_id = model_image.get("ipId")
+                log_debug("resolved productId=%s ipId=%s", product_id, ip_id)
+                if not product_id or not ip_id:
+                    log_error("modelImage has no productId or ipId id=%s", model_image_id)
+                    send_json(self, HTTPStatus.BAD_REQUEST, {"error": f"modelImage {model_image_id} has no productId or ipId"})
+                    return
+
+            prompt_path = pathlib.Path("D:/Code/media/gpt_image2/prompts/03_模特图.md")
+            prompt = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
+
+            log_debug("calling build_model_image_task product_id=%s ip_id=%s force=%s", product_id, ip_id, force)
+            try:
+                case_path, status = client.build_model_image_task(
+                    product_id=str(product_id or ""),
+                    ip_id=str(ip_id or ""),
+                    output_root=self.server.store.output_root,
+                    prompt=prompt,
+                    force=force,
+                )
+                log_debug("build_model_image_task returned case_path=%s status=%s", case_path, status)
+            except Exception as error:
+                log_error("build failed error=%s", error)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+                return
+
+            if status == "exists":
+                log_info("skipping - model image already exists product_id=%s ip_id=%s", product_id, ip_id)
+                send_json(self, HTTPStatus.CONFLICT, {"error": "model image already exists for this product/IP pair"})
+                return
+            if case_path is None:
+                log_error("build returned None case_path=%s status=%s", case_path, status)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "task build failed"})
+                return
+
+            try:
+                jobs = self.server.store.add_jobs([case_path])
+            except Exception as error:
+                log_error("enqueue failed error=%s", error)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+                return
+
+            job = jobs[0]
+            log_info("<<< OK %s", json.dumps({
+                "jobId": job.id,
+                "caseFile": str(job.case_file),
+                "prompt": job.prompt,
+                "mediaAi": public_media_ai(job.media_ai),
+            }, ensure_ascii=False))
+            send_json(
+                self,
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "job": {
+                        "id": job.id,
+                        "caseFile": str(job.case_file),
+                        "mediaAi": public_media_ai(job.media_ai),
+                    },
+                },
+            )
+            return
+
+        # ---- Single style-image endpoint ----------------------------------------
+        style_image_match = re.fullmatch(r"/v1/single/style-image", path)
+        if style_image_match:
+            log_info(">>> POST /v1/single/style-image")
+            cookie_header = self.headers.get("Cookie")
+            client = self.server.media_ai_client
+            client.resolve_cookie(cookie_header)
+
+            payload = parse_json_body(self)
+            model_image_id = payload.get("modelImageId")
+            pose_id = payload.get("poseId")
+            force = bool(payload.get("force", False))
+            log_info("request modelImageId=%s poseId=%s force=%s", model_image_id, pose_id, force)
+
+            if not model_image_id or not pose_id:
+                log_error("missing required params")
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": "modelImageId and poseId are required"})
+                return
+
+            prompt_path = pathlib.Path("D:/Code/media/gpt_image2/prompts/04_定妆图.md")
+            prompt = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
+
+            log_debug("calling build_style_image_task model_image_id=%s pose_id=%s force=%s", model_image_id, pose_id, force)
+            try:
+                case_path, status = client.build_style_image_task(
+                    model_image_id=str(model_image_id),
+                    pose_id=str(pose_id),
+                    output_root=self.server.store.output_root,
+                    prompt=prompt,
+                    force=force,
+                )
+                log_debug("build_style_image_task returned case_path=%s status=%s", case_path, status)
+            except Exception as error:
+                log_error("build failed error=%s", error)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+                return
+
+            if status == "exists":
+                log_info("skipping - style image already exists modelImageId=%s poseId=%s", model_image_id, pose_id)
+                send_json(self, HTTPStatus.CONFLICT, {"error": "style image already exists for this model image/pose pair"})
+                return
+            if case_path is None:
+                log_error("build returned None case_path=%s status=%s", case_path, status)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "task build failed"})
+                return
+
+            try:
+                jobs = self.server.store.add_jobs([case_path])
+            except Exception as error:
+                log_error("enqueue failed error=%s", error)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+                return
+
+            job = jobs[0]
+            log_info("<<< OK %s", json.dumps({
+                "jobId": job.id,
+                "caseFile": str(job.case_file),
+                "prompt": job.prompt,
+                "mediaAi": public_media_ai(job.media_ai),
+            }, ensure_ascii=False))
+            send_json(
+                self,
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "job": {
+                        "id": job.id,
+                        "caseFile": str(job.case_file),
+                        "mediaAi": public_media_ai(job.media_ai),
+                    },
+                },
+            )
+            return
+
+        # ---- Single first-frame-image endpoint -----------------------------------
+        first_frame_match = re.fullmatch(r"/v1/single/first-frame-image", path)
+        if first_frame_match:
+            log_info(">>> POST /v1/single/first-frame-image")
+            cookie_header = self.headers.get("Cookie")
+            client = self.server.media_ai_client
+            client.resolve_cookie(cookie_header)
+
+            payload = parse_json_body(self)
+            style_image_id = payload.get("styleImageId")
+            scene_id = payload.get("sceneId")
+            force = bool(payload.get("force", False))
+            log_info("request styleImageId=%s sceneId=%s force=%s", style_image_id, scene_id, force)
+
+            if not style_image_id or not scene_id:
+                log_error("missing required params")
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": "styleImageId and sceneId are required"})
+                return
+
+            prompt_path = pathlib.Path("D:/Code/media/gpt_image2/prompts/05_首帧图.md")
+            prompt = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
+
+            log_debug("calling build_first_frame_task style_image_id=%s scene_id=%s force=%s", style_image_id, scene_id, force)
+            try:
+                case_path, status = client.build_first_frame_task(
+                    style_image_id=str(style_image_id),
+                    scene_id=str(scene_id),
+                    output_root=self.server.store.output_root,
+                    prompt=prompt,
+                    force=force,
+                )
+                log_debug("build_first_frame_task returned case_path=%s status=%s", case_path, status)
+            except Exception as error:
+                log_error("build failed error=%s", error)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+                return
+
+            if status == "exists":
+                log_info("skipping - first frame already exists styleImageId=%s sceneId=%s", style_image_id, scene_id)
+                send_json(self, HTTPStatus.CONFLICT, {"error": "first frame already exists for this style image/scene pair"})
+                return
+            if case_path is None:
+                log_error("build returned None case_path=%s status=%s", case_path, status)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "task build failed"})
+                return
+
+            try:
+                jobs = self.server.store.add_jobs([case_path])
+            except Exception as error:
+                log_error("enqueue failed error=%s", error)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+                return
+
+            job = jobs[0]
+            log_info("<<< OK %s", json.dumps({
+                "jobId": job.id,
+                "caseFile": str(job.case_file),
+                "prompt": job.prompt,
+                "mediaAi": public_media_ai(job.media_ai),
+            }, ensure_ascii=False))
+            send_json(
+                self,
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "job": {
+                        "id": job.id,
+                        "caseFile": str(job.case_file),
+                        "mediaAi": public_media_ai(job.media_ai),
+                    },
+                },
+            )
             return
 
         send_json(self, HTTPStatus.NOT_FOUND, {"error": "not_found"})
@@ -746,17 +1062,17 @@ def run_server(host: str, port: int, task_arguments: list[str], output_root: pat
     store = JobStore(jobs=jobs, output_root=output_root.resolve())
     output_root.mkdir(parents=True, exist_ok=True)
 
-    print(f"Loaded {len(jobs)} job(s).", flush=True)
+    log_info("server startup loaded_jobs=%d", len(jobs))
     for job in jobs:
-        print(f"- {job.id}: {job.case_file}", flush=True)
-    print(f"Output directory: {output_root.resolve()}", flush=True)
-    print(f"Listening on http://{host}:{port}", flush=True)
+        log_info("  job_id=%s case_file=%s", job.id, job.case_file)
+    log_info("output_directory=%s", output_root.resolve())
+    log_info("listening on http://%s:%d", host, port)
 
     server = AppServer((host, port), RequestHandler, store)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nServer stopped.", flush=True)
+        log_info("server stopped")
 
 
 def inspect_case(task_argument: str) -> None:

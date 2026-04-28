@@ -24,6 +24,8 @@ from submit_media_ai_model_images import (
 )
 
 
+from local_bridge.media_ai_client import MediaAIClient
+
 DEFAULT_PROMPT_FILE = pathlib.Path("prompts/04_定妆图.md")
 
 
@@ -147,73 +149,74 @@ def existing_style_images(
     return payload if isinstance(payload, list) else []
 
 
-def build_task_file(
-    *,
-    args: argparse.Namespace,
-    cookie: str | None,
-    prompt: str,
-    model_image: dict[str, Any],
-    pose: dict[str, Any],
-    output_root: pathlib.Path,
-) -> pathlib.Path | None:
-    base_url = args.base_url.rstrip("/")
-    model_image_id = str(model_image.get("id") or "")
-    product_id = str(model_image.get("productId") or "")
-    product_name = str(model_image.get("productName") or product_id)
-    ip_id = str(model_image.get("ipId") or "")
-    pose_id = str(pose.get("id") or "")
-    pose_name = str(pose.get("name") or pose_id)
-    model_url = str(model_image.get("url") or "")
-    pose_url = str(pose.get("url") or "")
-    if not model_image_id or not product_id or not pose_id or not model_url or not pose_url:
-        return None
-
-    task_dir = output_root / (
-        f"{slugify(product_name)}-{product_id[:8]}__"
-        f"model-{model_image_id[:8]}__pose-{slugify(pose_name)}-{pose_id[:8]}"
-    )
-    assets_dir = task_dir / "assets"
-    assets_dir.mkdir(parents=True, exist_ok=True)
-
-    model_media_url = resolve_media_url(base_url, model_url)
-    pose_media_url = resolve_media_url(base_url, pose_url)
-    model_path = assets_dir / f"model-image{extension_from_url(model_media_url)}"
-    pose_path = assets_dir / f"pose-reference{extension_from_url(pose_media_url)}"
-    download_file(model_media_url, model_path, cookie=cookie, timeout=args.timeout)
-    download_file(pose_media_url, pose_path, cookie=cookie, timeout=args.timeout)
-
-    lines = [
-        f"# {product_name} / {pose_name} 定妆图",
-        "",
-        f"[图片一：换装好的模特图]({model_path.relative_to(task_dir).as_posix()})",
-        f"[图片二：姿势参考图]({pose_path.relative_to(task_dir).as_posix()})",
-        "",
-        prompt,
-        "",
-    ]
-    case_path = task_dir / "task.md"
-    case_path.write_text("\n".join(lines), encoding="utf-8")
-
-    sidecar: dict[str, Any] = {
-        "kind": "style-image",
-        "baseUrl": base_url,
-        "productId": product_id,
-        "productName": product_name,
-        "ipId": ip_id,
-        "modelImageId": model_image_id,
-        "poseId": pose_id,
-        "poseName": pose_name,
-        "uploadSubDir": args.upload_subdir,
-        "modelImageUrl": model_media_url,
-        "poseUrl": pose_media_url,
-    }
-    if not args.no_embed_cookie and cookie:
-        sidecar["cookie"] = cookie
-    case_path.with_suffix(".media-ai.json").write_text(
-        json.dumps(sidecar, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    return case_path.resolve()
+# [DEPRECATED] Replaced by local_bridge.single_task.build_style_image_task
+# def build_task_file(
+#     *,
+#     args: argparse.Namespace,
+#     cookie: str | None,
+#     prompt: str,
+#     model_image: dict[str, Any],
+#     pose: dict[str, Any],
+#     output_root: pathlib.Path,
+# ) -> pathlib.Path | None:
+#     base_url = args.base_url.rstrip("/")
+#     model_image_id = str(model_image.get("id") or "")
+#     product_id = str(model_image.get("productId") or "")
+#     product_name = str(model_image.get("productName") or product_id)
+#     ip_id = str(model_image.get("ipId") or "")
+#     pose_id = str(pose.get("id") or "")
+#     pose_name = str(pose.get("name") or pose_id)
+#     model_url = str(model_image.get("url") or "")
+#     pose_url = str(pose.get("url") or "")
+#     if not model_image_id or not product_id or not pose_id or not model_url or not pose_url:
+#         return None
+#
+#     task_dir = output_root / (
+#         f"{slugify(product_name)}-{product_id[:8]}__"
+#         f"model-{model_image_id[:8]}__pose-{slugify(pose_name)}-{pose_id[:8]}"
+#     )
+#     assets_dir = task_dir / "assets"
+#     assets_dir.mkdir(parents=True, exist_ok=True)
+#
+#     model_media_url = resolve_media_url(base_url, model_url)
+#     pose_media_url = resolve_media_url(base_url, pose_url)
+#     model_path = assets_dir / f"model-image{extension_from_url(model_media_url)}"
+#     pose_path = assets_dir / f"pose-reference{extension_from_url(pose_media_url)}"
+#     download_file(model_media_url, model_path, cookie=cookie, timeout=args.timeout)
+#     download_file(pose_media_url, pose_path, cookie=cookie, timeout=args.timeout)
+#
+#     lines = [
+#         f"# {product_name} / {pose_name} 定妆图",
+#         "",
+#         f"[图片一：换装好的模特图]({model_path.relative_to(task_dir).as_posix()})",
+#         f"[图片二：姿势参考图]({pose_path.relative_to(task_dir).as_posix()})",
+#         "",
+#         prompt,
+#         "",
+#     ]
+#     case_path = task_dir / "task.md"
+#     case_path.write_text("\n".join(lines), encoding="utf-8")
+#
+#     sidecar: dict[str, Any] = {
+#         "kind": "style-image",
+#         "baseUrl": base_url,
+#         "productId": product_id,
+#         "productName": product_name,
+#         "ipId": ip_id,
+#         "modelImageId": model_image_id,
+#         "poseId": pose_id,
+#         "poseName": pose_name,
+#         "uploadSubDir": args.upload_subdir,
+#         "modelImageUrl": model_media_url,
+#         "poseUrl": pose_media_url,
+#     }
+#     if not args.no_embed_cookie and cookie:
+#         sidecar["cookie"] = cookie
+#     case_path.with_suffix(".media-ai.json").write_text(
+#         json.dumps(sidecar, ensure_ascii=False, indent=2),
+#         encoding="utf-8",
+#     )
+#     return case_path.resolve()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -258,6 +261,8 @@ def main() -> int:
     output_root = pathlib.Path(args.output_root)
     output_root.mkdir(parents=True, exist_ok=True)
 
+    client = MediaAIClient(base_url=base_url, cookie=cookie, timeout=args.timeout)
+
     model_images = fetch_model_images(args, cookie)
     poses = fetch_poses(args, cookie)
     task_paths: list[pathlib.Path] = []
@@ -267,13 +272,7 @@ def main() -> int:
         product_id = str(model_image.get("productId") or "")
         model_image_id = str(model_image.get("id") or "")
         product_name = str(model_image.get("productName") or product_id)
-        existing = existing_style_images(
-            base_url,
-            product_id,
-            model_image_id,
-            cookie=cookie,
-            timeout=args.timeout,
-        )
+        existing = client.existing_style_images(product_id, model_image_id)
         existing_pose_ids = {str(item.get("poseId") or "") for item in existing}
 
         for pose in poses:
@@ -293,13 +292,12 @@ def main() -> int:
                 print(f"[SKIP] {model_image_id} / {pose_id} {pose_name} already has style image.")
                 continue
 
-            case_path = build_task_file(
-                args=args,
-                cookie=cookie,
-                prompt=prompt,
-                model_image=model_image,
-                pose=pose,
+            case_path, _ = client.build_style_image_task(
+                model_image_id=model_image_id,
+                pose_id=pose_id,
                 output_root=output_root,
+                prompt=prompt,
+                force=True,
             )
             if not case_path:
                 skipped.append(

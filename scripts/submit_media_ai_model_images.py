@@ -16,6 +16,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urljoin, urlparse, urlunparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
+from local_bridge.media_ai_client import MediaAIClient
 
 DEFAULT_BASE_URL = "http://localhost:3000"
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
@@ -385,79 +386,79 @@ def existing_model_images(
     return payload if isinstance(payload, list) else []
 
 
-def build_task_file(
-    *,
-    args: argparse.Namespace,
-    cookie: str | None,
-    prompt: str,
-    ip: dict[str, Any],
-    product: dict[str, Any],
-    output_root: pathlib.Path,
-) -> pathlib.Path | None:
-    base_url = args.base_url.rstrip("/")
-    product_id = str(product.get("id") or "")
-    product_name = str(product.get("name") or product_id)
-    ip_id = str(ip.get("id") or "")
-    ip_name = str(ip.get("nickname") or ip_id)
-    main_image_url, detail_image_urls = select_images(
-        product,
-        include_detail_images=not args.no_detail_images,
-        max_detail_images=args.max_detail_images,
-    )
-    ip_full_body_url = ip.get("fullBodyUrl")
-
-    if not product_id or not ip_id or not main_image_url or not ip_full_body_url:
-        return None
-
-    task_dir = output_root / f"{slugify(product_name)}-{product_id[:8]}__{slugify(ip_name)}-{ip_id[:8]}"
-    assets_dir = task_dir / "assets"
-    assets_dir.mkdir(parents=True, exist_ok=True)
-
-    ip_url = resolve_media_url(base_url, str(ip_full_body_url))
-    main_url = resolve_media_url(base_url, main_image_url)
-    detail_urls = [resolve_media_url(base_url, item) for item in detail_image_urls]
-
-    ip_path = assets_dir / f"model-reference{extension_from_url(ip_url)}"
-    main_path = assets_dir / f"product-main{extension_from_url(main_url)}"
-    download_file(ip_url, ip_path, cookie=cookie, timeout=args.timeout)
-    download_file(main_url, main_path, cookie=cookie, timeout=args.timeout)
-
-    detail_paths: list[pathlib.Path] = []
-    for index, url in enumerate(detail_urls, start=1):
-        detail_path = assets_dir / f"product-detail-{index:02d}{extension_from_url(url)}"
-        download_file(url, detail_path, cookie=cookie, timeout=args.timeout)
-        detail_paths.append(detail_path)
-
-    lines = [
-        f"# {product_name} / {ip_name} 模特图",
-        "",
-        f"[图片一：模特参考图]({ip_path.relative_to(task_dir).as_posix()})",
-        f"[图片二：服装主图]({main_path.relative_to(task_dir).as_posix()})",
-    ]
-    for index, detail_path in enumerate(detail_paths, start=1):
-        lines.append(f"[服装细节图{index}]({detail_path.relative_to(task_dir).as_posix()})")
-    lines.extend(["", prompt, ""])
-
-    case_path = task_dir / "task.md"
-    case_path.write_text("\n".join(lines), encoding="utf-8")
-
-    sidecar: dict[str, Any] = {
-        "baseUrl": base_url,
-        "productId": product_id,
-        "productName": product_name,
-        "ipId": ip_id,
-        "ipNickname": ip_name,
-        "uploadSubDir": args.upload_subdir,
-        "productMainImageUrl": main_url,
-        "productDetailImageUrls": detail_urls,
-    }
-    if not args.no_embed_cookie and cookie:
-        sidecar["cookie"] = cookie
-    case_path.with_suffix(".media-ai.json").write_text(
-        json.dumps(sidecar, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    return case_path.resolve()
+# def build_task_file(
+#     *,
+#     args: argparse.Namespace,
+#     cookie: str | None,
+#     prompt: str,
+#     ip: dict[str, Any],
+#     product: dict[str, Any],
+#     output_root: pathlib.Path,
+# ) -> pathlib.Path | None:
+#     base_url = args.base_url.rstrip("/")
+#     product_id = str(product.get("id") or "")
+#     product_name = str(product.get("name") or product_id)
+#     ip_id = str(ip.get("id") or "")
+#     ip_name = str(ip.get("nickname") or ip_id)
+#     main_image_url, detail_image_urls = select_images(
+#         product,
+#         include_detail_images=not args.no_detail_images,
+#         max_detail_images=args.max_detail_images,
+#     )
+#     ip_full_body_url = ip.get("fullBodyUrl")
+#
+#     if not product_id or not ip_id or not main_image_url or not ip_full_body_url:
+#         return None
+#
+#     task_dir = output_root / f"{slugify(product_name)}-{product_id[:8]}__{slugify(ip_name)}-{ip_id[:8]}"
+#     assets_dir = task_dir / "assets"
+#     assets_dir.mkdir(parents=True, exist_ok=True)
+#
+#     ip_url = resolve_media_url(base_url, str(ip_full_body_url))
+#     main_url = resolve_media_url(base_url, main_image_url)
+#     detail_urls = [resolve_media_url(base_url, item) for item in detail_image_urls]
+#
+#     ip_path = assets_dir / f"model-reference{extension_from_url(ip_url)}"
+#     main_path = assets_dir / f"product-main{extension_from_url(main_url)}"
+#     download_file(ip_url, ip_path, cookie=cookie, timeout=args.timeout)
+#     download_file(main_url, main_path, cookie=cookie, timeout=args.timeout)
+#
+#     detail_paths: list[pathlib.Path] = []
+#     for index, url in enumerate(detail_urls, start=1):
+#         detail_path = assets_dir / f"product-detail-{index:02d}{extension_from_url(url)}"
+#         download_file(url, detail_path, cookie=cookie, timeout=args.timeout)
+#         detail_paths.append(detail_path)
+#
+#     lines = [
+#         f"# {product_name} / {ip_name} 模特图",
+#         "",
+#         f"[图片一：模特参考图]({ip_path.relative_to(task_dir).as_posix()})",
+#         f"[图片二：服装主图]({main_path.relative_to(task_dir).as_posix()})",
+#     ]
+#     for index, detail_path in enumerate(detail_paths, start=1):
+#         lines.append(f"[服装细节图{index}]({detail_path.relative_to(task_dir).as_posix()})")
+#     lines.extend(["", prompt, ""])
+#
+#     case_path = task_dir / "task.md"
+#     case_path.write_text("\n".join(lines), encoding="utf-8")
+#
+#     sidecar: dict[str, Any] = {
+#         "baseUrl": base_url,
+#         "productId": product_id,
+#         "productName": product_name,
+#         "ipId": ip_id,
+#         "ipNickname": ip_name,
+#         "uploadSubDir": args.upload_subdir,
+#         "productMainImageUrl": main_url,
+#         "productDetailImageUrls": detail_urls,
+#     }
+#     if not args.no_embed_cookie and cookie:
+#         sidecar["cookie"] = cookie
+#     case_path.with_suffix(".media-ai.json").write_text(
+#         json.dumps(sidecar, ensure_ascii=False, indent=2),
+#         encoding="utf-8",
+#     )
+#     return case_path.resolve()
 
 
 def wait_for_jobs(
@@ -538,6 +539,8 @@ def main() -> int:
     prompt = read_text(pathlib.Path(args.prompt_file))
     base_url = args.base_url.rstrip("/")
 
+    client = MediaAIClient(base_url=base_url, cookie=cookie, timeout=args.timeout)
+
     products = fetch_products(args, cookie)
     ips = fetch_ips(args, cookie)
     output_root = pathlib.Path(args.output_root)
@@ -564,7 +567,7 @@ def main() -> int:
                 print(f"[SKIP] {product_id} {product_name} / {ip_id} {ip_name} missing IP fullBodyUrl.")
                 continue
 
-            existing = existing_model_images(base_url, product_id, ip_id, cookie=cookie, timeout=args.timeout)
+            existing = client.existing_model_images(product_id, ip_id)
             if existing:
                 skipped.append(
                     {
@@ -582,13 +585,12 @@ def main() -> int:
                 )
                 continue
 
-            case_path = build_task_file(
-                args=args,
-                cookie=cookie,
-                prompt=prompt,
-                ip=ip,
-                product=product,
+            case_path, _ = client.build_model_image_task(
+                product_id=str(product.get("id") or ""),
+                ip_id=str(ip.get("id") or ""),
                 output_root=output_root,
+                prompt=prompt,
+                force=True,
             )
             if not case_path:
                 skipped.append(

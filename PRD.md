@@ -101,7 +101,7 @@ task 保存在 media_ai_task 表中。表中需要包含如下字段:
 用户输入一下参数，完成模特图、定妆图、首帧图一整套流程:
 参数:
 - ip_id: 981cd79c-5973-429a-8edf-dff3eda45014
-- product_id: 95256aaf-48c5-46a7-a4fd-990d756c9ed0
+- product_id: 3813528280213094793
 - pose_id: 4df51547-928f-44b6-ad5a-0f7807c0106c
 - scene_id: 3d30e5eb-292d-4574-95f6-abb25e00fc6c
 
