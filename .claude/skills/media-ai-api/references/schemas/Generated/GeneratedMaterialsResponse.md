@@ -22,6 +22,7 @@ Generated product materials grouped by type.
 | `productId` | string | Yes |  |
 | `ipId` | string | Yes |  |
 | `url` | string | Yes |  |
+| `prompt` | string,null | Yes |  |
 | `inputHash` | string | Yes |  |
 | `createdAt` | string (date-time) | Yes | ISO 8601 date-time string. |
 
@@ -34,6 +35,7 @@ Generated product materials grouped by type.
 | `ipId` | string | Yes |  |
 | `modelImageId` | string | Yes |  |
 | `url` | string | Yes |  |
+| `prompt` | string,null | Yes |  |
 | `poseId` | string,null | Yes |  |
 | `makeupId` | string,null | Yes |  |
 | `accessoryId` | string,null | Yes |  |
@@ -49,6 +51,7 @@ Generated product materials grouped by type.
 | `ipId` | string | Yes |  |
 | `styleImageId` | string,null | Yes |  |
 | `url` | string | Yes |  |
+| `prompt` | string,null | Yes |  |
 | `sceneId` | string,null | Yes |  |
 | `composition` | string,null | Yes |  |
 | `inputHash` | string | Yes |  |

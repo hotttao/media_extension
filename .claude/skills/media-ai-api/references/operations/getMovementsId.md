@@ -21,5 +21,5 @@
 
 **Success Response Schema:**
 
-[Movement](../schemas/Movement/Movement.md)
+[MovementMaterial](../schemas/Movement/MovementMaterial.md)
 

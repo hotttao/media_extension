@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [CreateMovementMaterial](../schemas/Create/CreateMovementMaterial.md)
+
 ## Responses
 
 | Status | Description |
@@ -22,5 +24,5 @@
 
 **Success Response Schema:**
 
-[Movement](../schemas/Movement/Movement.md)
+[MovementMaterial](../schemas/Movement/MovementMaterial.md)
 

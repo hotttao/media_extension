@@ -12,6 +12,7 @@ Generated model image.
 | `productId` | string | Yes |  |
 | `ipId` | string | Yes |  |
 | `url` | string | Yes |  |
+| `prompt` | string,null | Yes |  |
 | `inputHash` | string | Yes |  |
 | `createdAt` | string (date-time) | Yes | ISO 8601 date-time string. |
 

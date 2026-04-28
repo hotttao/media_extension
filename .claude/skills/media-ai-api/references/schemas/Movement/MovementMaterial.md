@@ -13,5 +13,7 @@ Movement material.
 | `content` | string | Yes |  |
 | `clothing` | string,null | Yes |  |
 | `scope` | string,null | Yes |  |
+| `isGeneral` | boolean | Yes |  |
+| `poseIds` | string[] | Yes |  |
 | `createdAt` | string (date-time) | Yes | ISO 8601 date-time string. |
 

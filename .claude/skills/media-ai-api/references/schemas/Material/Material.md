@@ -15,6 +15,7 @@ Material asset.
 | `type` | enum: SCENE, POSE, MAKEUP... | Yes |  |
 | `name` | string | Yes |  |
 | `description` | string,null | Yes |  |
+| `prompt` | string,null | Yes |  |
 | `url` | string | Yes |  |
 | `tags` | string,null | Yes |  |
 | `createdAt` | string (date-time) | Yes | ISO 8601 date-time string. |

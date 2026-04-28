@@ -14,5 +14,5 @@
 
 **Success Response Schema:**
 
-[MovementList](../schemas/Movement/MovementList.md)
+[MovementMaterialList](../schemas/Movement/MovementMaterialList.md)
 

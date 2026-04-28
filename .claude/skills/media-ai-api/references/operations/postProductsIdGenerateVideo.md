@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [GenerateVideoRequest](../schemas/Generate/GenerateVideoRequest.md)
+
 ## Responses
 
 | Status | Description |
@@ -24,9 +26,10 @@
 | 201 | Success |
 | 400 | Error |
 | 401 | Error |
+| 404 | Error |
 | 500 | Error |
 
 **Success Response Schema:**
 
-[GenerationJobResponse](../schemas/Generation/GenerationJobResponse.md)
+[VideoGenerationResponse](../schemas/Video/VideoGenerationResponse.md)
 

@@ -28,5 +28,5 @@
 
 **Success Response Schema:**
 
-[GenerationJobResponse](../schemas/Generation/GenerationJobResponse.md)
+[StyleImageSaveResponse](../schemas/Style/StyleImageSaveResponse.md)
 

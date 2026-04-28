@@ -18,9 +18,12 @@
 | GET | `/api/products/{id}` | GET products id | [View](../operations/getProductsId.md) |
 | DELETE | `/api/products/{id}` | DELETE products id | [View](../operations/deleteProductsId.md) |
 | PATCH | `/api/products/{id}` | PATCH products id | [View](../operations/patchProductsId.md) |
+| GET | `/api/products/{id}/scenes` | GET products id scenes | [View](../operations/getProductsIdScenes.md) |
+| PUT | `/api/products/{id}/scenes` | PUT products id scenes | [View](../operations/putProductsIdScenes.md) |
 | POST | `/api/products/{id}/style-image` | POST products id style image | [View](../operations/postProductsIdStyleImage.md) |
 | POST | `/api/products/{id}/style-image/save` | POST products id style image save | [View](../operations/postProductsIdStyleImageSave.md) |
 | GET | `/api/products/{id}/style-images` | GET products id style images | [View](../operations/getProductsIdStyleImages.md) |
+| GET | `/api/products/{id}/videos` | GET products id videos | [View](../operations/getProductsIdVideos.md) |
 | POST | `/api/products/extract` | POST products extract | [View](../operations/postProductsExtract.md) |
 | GET | `/api/products` | GET products | [View](../operations/getProducts.md) |
 | POST | `/api/products` | POST products | [View](../operations/postProducts.md) |

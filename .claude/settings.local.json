@@ -4,7 +4,24 @@
       "Bash(git checkout:*)",
       "Bash(python:*)",
       "Bash(curl -s \"http://localhost:3000/api/products/040e2561-6cab-4e98-99c1-47c16861cf07/style-images\" -H \"Cookie: $MEDIA_AI_COOKIE\")",
-      "Skill(context:prime)"
+      "Skill(context:prime)",
+      "Bash(curl:*)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill:*)",
+      "Bash(python3 -c \":*)",
+      "Bash(pkill -f \"python.*server.py serve\")",
+      "Bash(pkill -f \"local_bridge.server\")",
+      "Bash(MEDIA_AI_USER=\"1556824234@qq.com\" MEDIA_AI_PASSWORD=\"ST123456\" python -c \":*)",
+      "Bash(1 echo:*)",
+      "Bash(pkill -f \"server.py\")",
+      "Bash(pkill -f \"local_bridge\")",
+      "Bash(python -c \":*)",
+      "Bash(while read:*)",
+      "Bash(do taskkill:*)",
+      "Bash(done)",
+      "Bash(do echo:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

@@ -21,5 +21,5 @@
 
 **Success Response Schema:**
 
-[FirstFrameSaveResponse](../schemas/First/FirstFrameSaveResponse.md)
+[FirstFrameList](../schemas/First/FirstFrameList.md)
 
