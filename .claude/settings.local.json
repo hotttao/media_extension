@@ -21,7 +21,12 @@
       "Bash(done)",
       "Bash(do echo:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(node --check extension/content-script.js)",
+      "Bash(git fetch:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(.venv/Scripts/Activate.ps1)",
+      "Bash(source .venv/Scripts/activate)"
     ]
   }
 }

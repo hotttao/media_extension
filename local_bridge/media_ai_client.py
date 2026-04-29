@@ -507,26 +507,40 @@ class MediaAIClient:
         )
         return payload if isinstance(payload, list) else []
 
-    def existing_style_images(self, product_id: str, model_image_id: str) -> list[dict]:
+    def existing_style_images(self, model_image_id: str, pose_id: str) -> list[dict]:
         query = urlencode({"modelImageId": model_image_id})
         payload = self.request_json(
-            "GET", f"/api/products/{product_id}/style-images?{query}"
+            "GET", f"/api/model-images/{model_image_id}/style-images?{query}"
         )
-        return payload if isinstance(payload, list) else []
+        items: list[dict] = []
+        if isinstance(payload, list):
+            items = [item for item in payload if isinstance(item, dict)]
+        elif isinstance(payload, dict):
+            for key in ("styleImages", "items", "data"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    items = [item for item in value if isinstance(item, dict)]
+                    break
+        return [item for item in items if str(item.get("poseId") or "") == pose_id]
 
-    def existing_first_frames(self, product_id: str, style_image_id: str) -> list[dict]:
+    def existing_first_frames(
+        self, product_id: str, style_image_id: str, scene_id: str
+    ) -> list[dict]:
         query = urlencode({"styleImageId": style_image_id})
         payload = self.request_json(
             "GET", f"/api/products/{product_id}/first-frames?{query}"
         )
+        items: list[dict] = []
         if isinstance(payload, list):
-            return [item for item in payload if isinstance(item, dict)]
-        if isinstance(payload, dict):
+            items = [item for item in payload if isinstance(item, dict)]
+        elif isinstance(payload, dict):
             for key in ("firstFrames", "items", "data"):
                 value = payload.get(key)
                 if isinstance(value, list):
-                    return [item for item in value if isinstance(item, dict)]
-        return []
+                    items = [item for item in value if isinstance(item, dict)]
+                    break
+        # Filter by sceneId to avoid false positives
+        return [item for item in items if str(item.get("sceneId") or "") == scene_id]
 
     # -------------------------------------------------------------------------
     # Task Builders
@@ -653,7 +667,7 @@ class MediaAIClient:
             return (None, "error")
 
         if not force:
-            existing = self.existing_style_images(product_id, model_image_id_str)
+            existing = self.existing_style_images(model_image_id_str, pose_id_str)
             if existing:
                 return (None, "exists")
 
@@ -735,7 +749,7 @@ class MediaAIClient:
             return (None, "error")
 
         if not force:
-            existing = self.existing_first_frames(product_id, style_image_id_str)
+            existing = self.existing_first_frames(product_id, style_image_id_str, scene_id_key)
             if existing:
                 return (None, "exists")
 

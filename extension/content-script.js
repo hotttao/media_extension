@@ -1,4 +1,5 @@
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+const SUBMISSION_EFFECT_TIMEOUT_MS = 120 * 1000;
 const POLL_INTERVAL_MS = 5000;
 const HEARTBEAT_INTERVAL_MS = 20000;
 
@@ -95,7 +96,7 @@ async function sendProgress(serverUrl, message, at, details = null) {
 }
 
 async function waitFor(predicate, options = {}) {
-  const timeoutMs = options.timeoutMs ?? 10000;
+  const timeoutMs = options.timeoutMs ?? 120000;
   const intervalMs = options.intervalMs ?? 250;
   const label = options.label ?? "condition";
   const deadline = Date.now() + timeoutMs;
@@ -198,7 +199,7 @@ async function ensureFileInput() {
   }
 
   input = await waitFor(() => document.querySelector("input[type='file']"), {
-    timeoutMs: 5000,
+    timeoutMs: 120000,
     label: "file input",
   });
   return input;
@@ -237,18 +238,17 @@ async function uploadAssets(job) {
     input.files = transfer.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
     input.dispatchEvent(new Event("input", { bubbles: true }));
-    await delay(2500);
-    return;
+  } else {
+    for (const file of files) {
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
   }
 
-  for (const file of files) {
-    const transfer = new DataTransfer();
-    transfer.items.add(file);
-    input.files = transfer.files;
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    await delay(1500);
-  }
+  await waitForUploadComplete(files.length);
 }
 
 function describeButton(button) {
@@ -342,6 +342,19 @@ function collectImageKeys(root = document) {
   return new Set(collectImageEntries(root).map((entry) => entry.key));
 }
 
+async function waitForUploadComplete(expectedCount) {
+  const deadline = Date.now() + 120000;
+  while (Date.now() < deadline) {
+    const uploadedImages = collectImageEntries(getImageSearchRoot())
+      .filter((e) => e.key.includes("file_"));
+    if (uploadedImages.length >= expectedCount) {
+      return true;
+    }
+    await delay(1000);
+  }
+  return false;
+}
+
 function getImageSearchRoot() {
   return document.querySelector("main") || document;
 }
@@ -370,7 +383,7 @@ function describeAssistantTurn(turnElement, imageEntries) {
 
 async function waitForSubmissionEffect(composer, baselineAssistantCount) {
   const originalText = getComposerText(composer).trim();
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + SUBMISSION_EFFECT_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
     const currentText = getComposerText(composer).trim();
@@ -646,7 +659,7 @@ async function runJob(job, serverUrl) {
 
   try {
     await record(`Preparing ${job.id}`);
-    const composer = await waitFor(() => findComposer(), { timeoutMs: 15000, label: "prompt composer" });
+    const composer = await waitFor(() => findComposer(), { timeoutMs: 120000, label: "prompt composer" });
 
     await record("Uploading reference images");
     await uploadAssets(job);
