@@ -1,0 +1,9 @@
+{
+  "kind": "jimeng_video",
+  "baseUrl": "http://localhost:3000",
+  "productId": "prod_002",
+  "ipId": "ip_002",
+  "firstFrameId": "ff_001",
+  "firstFrameUrl": "http://localhost:3000/media/first_frame.png",
+  "movement": "缓慢转身展示服装"
+}

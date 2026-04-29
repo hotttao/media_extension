@@ -1,0 +1,13 @@
+{
+  "kind": "jimeng_image",
+  "baseUrl": "http://localhost:3000",
+  "productId": "prod_001",
+  "productName": "Test Product",
+  "ipId": "ip_001",
+  "styleImageId": "style_001",
+  "styleImageUrl": "http://localhost:3000/media/person.png",
+  "sceneId": "scene_001",
+  "sceneName": "scene_name",
+  "sceneUrl": "http://localhost:3000/media/scene.png",
+  "uploadSubDir": "first-frames"
+}
