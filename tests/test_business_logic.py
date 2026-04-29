@@ -1,0 +1,145 @@
+"""Tests for Level-3 business logic functions.
+
+Functions under test:
+  - load_case_file(case_path)
+  - build_jobs(case_paths, output_root, start_index)
+"""
+
+from __future__ import annotations
+
+import pathlib
+from unittest.mock import patch
+
+import pytest
+
+from local_bridge.server import build_jobs, load_case_file
+
+
+class Test_load_case_file:
+    def test_loads_prompt_only(self, tmp_path: pathlib.Path) -> None:
+        task = tmp_path / "task.md"
+        task.write_text("hello world prompt", encoding="utf-8")
+        prompt, assets = load_case_file(task)
+        assert prompt == "hello world prompt"
+        assert assets == []
+
+    def test_extracts_assets(self, tmp_path: pathlib.Path) -> None:
+        # Create a real image file
+        img = tmp_path / "photo.png"
+        img.write_bytes(b"\x00" * 20)
+
+        task = tmp_path / "task.md"
+        task.write_text("[图片](photo.png)\n\n生成图片", encoding="utf-8")
+
+        prompt, assets = load_case_file(task)
+        assert len(assets) == 1
+        assert assets[0]["name"] == "photo.png"
+        assert assets[0]["label"] == "图片"
+
+    def test_multiple_assets(self, tmp_path: pathlib.Path) -> None:
+        for name in ("a.png", "b.jpg"):
+            (tmp_path / name).write_bytes(b"\x00")
+        task = tmp_path / "task.md"
+        task.write_text("[图1](a.png) and [图2](b.jpg)", encoding="utf-8")
+        prompt, assets = load_case_file(task)
+        assert len(assets) == 2
+
+    def test_nonexistent_images_ignored(self, tmp_path: pathlib.Path) -> None:
+        task = tmp_path / "task.md"
+        task.write_text("[missing](nofile.png)\n\nprompt", encoding="utf-8")
+        prompt, assets = load_case_file(task)
+        assert "nofile.png" in prompt  # link kept since file missing
+        assert assets == []
+
+    def test_non_image_links_ignored(self, tmp_path: pathlib.Path) -> None:
+        task = tmp_path / "task.md"
+        task.write_text("[doc](readme.txt)", encoding="utf-8")
+        prompt, assets = load_case_file(task)
+        assert "readme.txt" in prompt
+        assert assets == []
+
+
+class Test_build_jobs:
+    def test_builds_single_job(self, tmp_path: pathlib.Path) -> None:
+        # Create a complete case
+        case_dir = tmp_path / "case1"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("generate something", encoding="utf-8")
+        (case_dir / ".media-ai.json").write_text(
+            '{"kind": "jimeng_image", "productId": "p1", "ipId": "i1"}',
+            encoding="utf-8",
+        )
+
+        jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job.prompt == "generate something"
+        assert job.status == "pending"
+        assert job.platform == "jimeng_image"
+        assert job.target_url == "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
+
+    def test_builds_multiple_jobs(self, tmp_path: pathlib.Path) -> None:
+        for i in range(3):
+            d = tmp_path / f"case{i}"
+            d.mkdir()
+            (d / "task.md").write_text(f"prompt {i}", encoding="utf-8")
+            (d / ".media-ai.json").write_text('{"kind": "jimeng_image", "productId": "p", "ipId": "i"}', encoding="utf-8")
+
+        jobs = build_jobs([tmp_path / f"case{i}/task.md" for i in range(3)], tmp_path / "output")
+        assert len(jobs) == 3
+
+    def test_gpt_job_platform(self, tmp_path: pathlib.Path) -> None:
+        case_dir = tmp_path / "gpt_case"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("GPT prompt", encoding="utf-8")
+        (case_dir / ".media-ai.json").write_text('{"productId": "p", "ipId": "i"}', encoding="utf-8")
+
+        jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
+        assert len(jobs) == 1
+        # GPT job has no platform set (default)
+        assert jobs[0].platform is None
+
+    def test_jimeng_video_job(self, tmp_path: pathlib.Path) -> None:
+        case_dir = tmp_path / "video_case"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("video prompt", encoding="utf-8")
+        (case_dir / ".media-ai.json").write_text(
+            '{"kind": "jimeng_video", "productId": "p", "ipId": "i", "firstFrameId": "ff"}',
+            encoding="utf-8",
+        )
+
+        jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
+        assert len(jobs) == 1
+        assert jobs[0].platform == "jimeng_video"
+        assert jobs[0].target_url == "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
+
+    def test_job_id_format(self, tmp_path: pathlib.Path) -> None:
+        case_dir = tmp_path / "my-case"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("test", encoding="utf-8")
+
+        jobs = build_jobs([case_dir / "task.md"], tmp_path / "output", start_index=5)
+        assert jobs[0].id.startswith("005-")
+
+    def test_output_dir_created(self, tmp_path: pathlib.Path) -> None:
+        case_dir = tmp_path / "case1"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("test", encoding="utf-8")
+        (case_dir / ".media-ai.json").write_text('{"productId": "p", "ipId": "i"}', encoding="utf-8")
+
+        output_root = tmp_path / "jobs_output"
+        jobs = build_jobs([case_dir / "task.md"], output_root)
+        assert jobs[0].output_dir.parent == output_root
+
+    def test_media_ai_sidecar_attached(self, tmp_path: pathlib.Path) -> None:
+        case_dir = tmp_path / "case1"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("test", encoding="utf-8")
+        (case_dir / ".media-ai.json").write_text(
+            '{"kind": "jimeng_image", "productId": "p", "ipId": "i", "styleImageId": "s1"}',
+            encoding="utf-8",
+        )
+
+        jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
+        assert jobs[0].media_ai is not None
+        assert jobs[0].media_ai["styleImageId"] == "s1"
