@@ -23,7 +23,15 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
-from local_bridge.media_ai_client import MediaAIClient
+from local_bridge.media_ai_client import (
+    MediaAIClient,
+    resolve_media_url,
+    extension_from_url,
+    slugify,
+    _scene_key,
+    _scene_name,
+    _scene_url,
+)
 
 
 MEDIA_AI_BASE_URL = os.environ.get("MEDIA_AI_BASE_URL", "http://localhost:3000")
@@ -1147,6 +1155,273 @@ class RequestHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+            return
+
+        # ---- Single jimeng-image endpoint ------------------------------------
+        jimeng_image_match = re.fullmatch(r"/v1/single/jimeng-image", path)
+        if jimeng_image_match:
+            log_info(">>> POST /v1/single/jimeng-image")
+            cookie_header = self.headers.get("Cookie")
+            client = self.server.media_ai_client
+            cookie = client.resolve_cookie(cookie_header)
+
+            payload = parse_json_body(self)
+            style_image_id = payload.get("styleImageId")
+            scene_id = payload.get("sceneId")
+            product_id = payload.get("productId")
+            ip_id = payload.get("ipId")
+            force = bool(payload.get("force", False))
+            prompt_text = payload.get("prompt", "").strip() or None
+            log_info("request styleImageId=%s sceneId=%s productId=%s ipId=%s force=%s",
+                style_image_id, scene_id, product_id, ip_id, force)
+
+            if not style_image_id:
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": "styleImageId is required"})
+                return
+
+            # Resolve style image
+            style_image = client.fetch_style_image(str(style_image_id))
+            if not style_image:
+                send_json(self, HTTPStatus.NOT_FOUND, {"error": f"style image {style_image_id} not found"})
+                return
+
+            resolved_product_id = str(style_image.get("productId") or "") or (product_id and str(product_id))
+            resolved_ip_id = str(style_image.get("ipId") or "") or (ip_id and str(ip_id))
+            if not resolved_product_id or not resolved_ip_id:
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": "style image has no productId or ipId"})
+                return
+
+            # Resolve scene if not provided
+            resolved_scene_id = scene_id and str(scene_id)
+            resolved_scene_name = ""
+            resolved_scene_url = ""
+            if resolved_scene_id:
+                scene = client.fetch_scene(resolved_scene_id)
+                if scene:
+                    resolved_scene_id = _scene_key(scene)
+                    resolved_scene_name = _scene_name(scene)
+                    resolved_scene_url = _scene_url(scene)
+
+            # Fetch IP for person image
+            ip = client.fetch_ip(resolved_ip_id)
+            if not ip:
+                send_json(self, HTTPStatus.NOT_FOUND, {"error": f"IP {resolved_ip_id} not found"})
+                return
+            ip_full_body_url = ip.get("fullBodyUrl")
+            if not ip_full_body_url:
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": f"IP {resolved_ip_id} has no fullBodyUrl"})
+                return
+
+            # Fetch product for main clothing image
+            product = client.fetch_product(resolved_product_id)
+            if not product:
+                send_json(self, HTTPStatus.NOT_FOUND, {"error": f"product {resolved_product_id} not found"})
+                return
+            product_name = str(product.get("name") or resolved_product_id)
+            images = product.get("images") or []
+            if not isinstance(images, list) or not images:
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": f"product {resolved_product_id} has no images"})
+                return
+            image_items = [item for item in images if isinstance(item, dict) and item.get("url")]
+            if not image_items:
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": f"product {resolved_product_id} has no valid image URLs"})
+                return
+            main_image = next((item for item in image_items if item.get("isMain") is True), None)
+            if main_image is None:
+                main_image = sorted(image_items, key=lambda x: int(x.get("order") or 999999))[0]
+            main_image_url = str(main_image.get("url") or "")
+
+            # Build task directory
+            task_dir = self.server.store.output_root / (
+                f"jimeng-img-{slugify(product_name)}-{resolved_product_id[:8]}__"
+                f"style-{style_image_id[:8]}__scene-{slugify(resolved_scene_name)}-{resolved_scene_id[:8]}"
+            )
+            assets_dir = task_dir / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download reference images
+            ip_media_url = resolve_media_url(client.media_base_url, str(ip_full_body_url))
+            main_media_url = resolve_media_url(client.media_base_url, main_image_url)
+            scene_media_url = resolve_media_url(client.media_base_url, resolved_scene_url) if resolved_scene_url else ""
+
+            ip_path = assets_dir / f"ip-full-body{extension_from_url(ip_media_url)}"
+            main_path = assets_dir / f"product-main{extension_from_url(main_media_url)}"
+            scene_path = assets_dir / f"scene-reference{extension_from_url(scene_media_url)}"
+
+            try:
+                client.download_file(ip_media_url, ip_path, cookie=cookie)
+                client.download_file(main_media_url, main_path, cookie=cookie)
+                if scene_media_url:
+                    client.download_file(scene_media_url, scene_path, cookie=cookie)
+            except Exception as e:
+                log_error("download failed: %s", e)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"download failed: {e}"})
+                return
+
+            # Prompt
+            if prompt_text is None:
+                prompt_path = pathlib.Path("D:/Code/media/gpt_image2/prompts/08_即梦文生图")
+                prompt_text = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
+
+            # Write task.md
+            case_path = task_dir / "task.md"
+            lines = [
+                f"# {product_name} / jimeng / {resolved_scene_name} 即梦生图",
+                "",
+                f"[图片一：人物]({ip_path.relative_to(task_dir).as_posix()})",
+                f"[图片二：服装]({main_path.relative_to(task_dir).as_posix()})",
+            ]
+            if scene_media_url:
+                lines.append(f"[图片三：场景]({scene_path.relative_to(task_dir).as_posix()})")
+            lines.extend(["", prompt_text, ""])
+            case_path.write_text("\n".join(lines), encoding="utf-8")
+
+            # Write .media-ai.json sidecar
+            sidecar: dict[str, Any] = {
+                "kind": "jimeng_image",
+                "baseUrl": client.base_url,
+                "productId": resolved_product_id,
+                "productName": product_name,
+                "ipId": resolved_ip_id,
+                "styleImageId": style_image_id,
+                "styleImageUrl": ip_media_url,
+                "uploadSubDir": "first-frames",
+            }
+            if resolved_scene_id:
+                sidecar["sceneId"] = resolved_scene_id
+            if resolved_scene_name:
+                sidecar["sceneName"] = resolved_scene_name
+            if resolved_scene_url:
+                sidecar["sceneUrl"] = resolved_scene_url
+            if cookie and not payload.get("noEmbedCookie"):
+                sidecar["cookie"] = cookie
+            case_path.with_suffix(".media-ai.json").write_text(
+                json.dumps(sidecar, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            try:
+                jobs = self.server.store.add_jobs([case_path])
+            except Exception as error:
+                log_error("enqueue failed: %s", error)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+                return
+
+            job = jobs[0]
+            log_info("<<< OK jimeng-image job_id=%s", job.id)
+            send_json(self, HTTPStatus.OK, {
+                "ok": True,
+                "job": {
+                    "id": job.id,
+                    "caseFile": str(job.case_file),
+                    "mediaAi": public_media_ai(job.media_ai),
+                },
+            })
+            return
+
+        # ---- Single jimeng-video endpoint ------------------------------------
+        jimeng_video_match = re.fullmatch(r"/v1/single/jimeng-video", path)
+        if jimeng_video_match:
+            log_info(">>> POST /v1/single/jimeng-video")
+            cookie_header = self.headers.get("Cookie")
+            client = self.server.media_ai_client
+            cookie = client.resolve_cookie(cookie_header)
+
+            payload = parse_json_body(self)
+            product_id = payload.get("productId")
+            ip_id = payload.get("ipId")
+            first_frame_id = payload.get("firstFrameId")
+            movement = payload.get("movement", "").strip()
+            force = bool(payload.get("force", False))
+            prompt_text = payload.get("prompt", "").strip() or None
+            log_info("request productId=%s ipId=%s firstFrameId=%s", product_id, ip_id, first_frame_id)
+
+            if not product_id:
+                send_json(self, HTTPStatus.BAD_REQUEST, {"error": "productId is required"})
+                return
+
+            resolved_product_id = str(product_id)
+            resolved_ip_id = str(ip_id) if ip_id else None
+            resolved_first_frame_id = str(first_frame_id) if first_frame_id else None
+
+            # Fetch first frame image if provided
+            first_frame_url = ""
+            first_frame_path = None
+            if resolved_first_frame_id:
+                first_frame = client.fetch_first_frame(resolved_first_frame_id)
+                if first_frame:
+                    first_frame_url = str(first_frame.get("url") or "")
+
+            # Build task directory
+            task_dir = self.server.store.output_root / (
+                f"jimeng-vid-{resolved_product_id[:8]}"
+                f"{f'-ip-{resolved_ip_id[:8]}' if resolved_ip_id else ''}"
+                f"{f'-ff-{resolved_first_frame_id[:8]}' if resolved_first_frame_id else ''}"
+            )
+            assets_dir = task_dir / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download first frame image if available
+            if first_frame_url:
+                first_frame_media_url = resolve_media_url(client.media_base_url, first_frame_url)
+                first_frame_path = assets_dir / f"first-frame{extension_from_url(first_frame_media_url)}"
+                try:
+                    client.download_file(first_frame_media_url, first_frame_path, cookie=cookie)
+                except Exception as e:
+                    log_info("download first frame failed: %s", e)
+
+            # Prompt
+            if prompt_text is None:
+                prompt_path = pathlib.Path("D:/Code/media/gpt_image2/prompts/09_即梦文生视频")
+                prompt_text = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
+
+            # Write task.md
+            case_path = task_dir / "task.md"
+            lines = [f"# jimeng video / product {resolved_product_id}"]
+            if first_frame_path and first_frame_path.exists():
+                lines.extend(["", f"[首帧图]({first_frame_path.relative_to(task_dir).as_posix()})", ""])
+            if movement:
+                lines.extend(["", f"动作描述: {movement}", ""])
+            lines.extend(["", prompt_text, ""])
+            case_path.write_text("\n".join(lines), encoding="utf-8")
+
+            # Write .media-ai.json sidecar
+            sidecar: dict[str, Any] = {
+                "kind": "jimeng_video",
+                "baseUrl": client.base_url,
+                "productId": resolved_product_id,
+                "uploadSubDir": "videos",
+            }
+            if resolved_ip_id:
+                sidecar["ipId"] = resolved_ip_id
+            if resolved_first_frame_id:
+                sidecar["firstFrameId"] = resolved_first_frame_id
+            if movement:
+                sidecar["movement"] = movement
+            if cookie and not payload.get("noEmbedCookie"):
+                sidecar["cookie"] = cookie
+            case_path.with_suffix(".media-ai.json").write_text(
+                json.dumps(sidecar, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            try:
+                jobs = self.server.store.add_jobs([case_path])
+            except Exception as error:
+                log_error("enqueue failed: %s", error)
+                send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+                return
+
+            job = jobs[0]
+            log_info("<<< OK jimeng-video job_id=%s", job.id)
+            send_json(self, HTTPStatus.OK, {
+                "ok": True,
+                "job": {
+                    "id": job.id,
+                    "caseFile": str(job.case_file),
+                    "mediaAi": public_media_ai(job.media_ai),
+                },
+            })
             return
 
         send_json(self, HTTPStatus.NOT_FOUND, {"error": "not_found"})
