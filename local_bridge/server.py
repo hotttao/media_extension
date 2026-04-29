@@ -347,10 +347,10 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
         target_url: str | None = None
         if media_ai:
             kind = media_ai.get("kind") or ""
-            if kind in ("jimeng_image", "jimeng-video", "jimeng_video", "jimeng-image"):
+            if kind in ("jimeng_image", "jimeng-image"):
                 platform = "jimeng_image"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
-            elif kind in ("jimeng_video",):
+            elif kind in ("jimeng_video", "jimeng-video"):
                 platform = "jimeng_video"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
 
@@ -511,6 +511,50 @@ def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[s
     save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
     return {
         "kind": kind,
+        "uploaded": upload_result,
+        "saved": save_result,
+    }
+
+
+def save_media_ai_generated_video(job: Job, output_path: pathlib.Path) -> dict[str, Any] | None:
+    """Upload and save a generated video to Media AI."""
+    if not job.media_ai:
+        return None
+
+    base_url = ensure_text(job.media_ai.get("baseUrl") or "http://localhost:3000").rstrip("/")
+    cookie = ensure_text(job.media_ai.get("cookie") or os.environ.get("MEDIA_AI_COOKIE") or "") or None
+    product_id = ensure_text(job.media_ai.get("productId") or "")
+    if not product_id:
+        raise RuntimeError("Media AI video sidecar requires productId.")
+
+    upload_result = upload_file_multipart(
+        f"{base_url}/api/upload",
+        cookie=cookie,
+        file_path=output_path,
+        sub_dir="videos",
+    )
+    video_url = ensure_text(upload_result.get("url") or "")
+    if not video_url:
+        raise RuntimeError(f"Media AI upload response did not include url: {upload_result}")
+
+    # Save video reference via product generate-video endpoint
+    # The video is already generated externally, we just record its URL
+    ip_id = ensure_text(job.media_ai.get("ipId") or "") or None
+    first_frame_id = ensure_text(job.media_ai.get("firstFrameId") or "") or None
+    movement = ensure_text(job.media_ai.get("movement") or "") or None
+
+    save_body: dict[str, Any] = {"url": video_url}
+    if ip_id:
+        save_body["ipId"] = ip_id
+    if first_frame_id:
+        save_body["firstFrameId"] = first_frame_id
+    if movement:
+        save_body["movement"] = movement
+
+    save_url = f"{base_url}/api/products/{product_id}/videos"
+    save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
+    return {
+        "kind": "jimeng_video",
         "uploaded": upload_result,
         "saved": save_result,
     }
@@ -703,6 +747,29 @@ class RequestHandler(BaseHTTPRequestHandler):
                     except Exception as error:
                         media_ai_results.append({"error": str(error)})
                         log_error("Media AI save failed job_id=%s error=%s", job.id, error)
+
+            # Handle video results (Jimeng video generation)
+            videos = payload.get("videos", [])
+            for index, video in enumerate(videos, start=1):
+                base64_data = video.get("base64Data", "")
+                if not base64_data:
+                    continue
+                binary = base64.b64decode(base64_data)
+                original_name = ensure_text(video.get("filename") or f"result-{index:02d}.mp4")
+                suffix = pathlib.Path(original_name).suffix or ".mp4"
+                output_name = f"video-{len(saved_files) + 1:02d}{suffix}"
+                output_path = job.output_dir / output_name
+                output_path.write_bytes(binary)
+                saved_files.append(output_name)
+                if job.media_ai:
+                    try:
+                        media_ai_result = save_media_ai_generated_video(job, output_path)
+                        if media_ai_result:
+                            media_ai_results.append(media_ai_result)
+                            log_info("saved generated video to Media AI job_id=%s", job.id)
+                    except Exception as error:
+                        media_ai_results.append({"error": str(error)})
+                        log_error("Media AI video save failed job_id=%s error=%s", job.id, error)
 
             media_ai_failed = any("error" in item for item in media_ai_results)
             status = "failed" if media_ai_failed else ("completed" if saved_files else "failed")
