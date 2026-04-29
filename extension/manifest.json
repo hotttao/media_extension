@@ -16,7 +16,8 @@
     "https://*.oaiusercontent.com/*",
     "https://*.blob.core.windows.net/*",
     "http://127.0.0.1:8765/*",
-    "http://localhost:8765/*"
+    "http://localhost:8765/*",
+    "https://jimeng.jianying.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -30,11 +31,13 @@
     {
       "matches": [
         "https://chatgpt.com/*",
-        "https://chat.openai.com/*"
+        "https://chat.openai.com/*",
+        "https://jimeng.jianying.com/*"
       ],
       "js": [
         "content-script.js"
       ],
+      "type": "module",
       "run_at": "document_idle"
     }
   ]
