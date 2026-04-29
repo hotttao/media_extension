@@ -1,4 +1,5 @@
 import { runGptJob } from "./content-handlers/gpt.js";
+import { runJimengImageJob } from "./content-handlers/jimeng-image.js";
 import { runJimengVideoJob } from "./content-handlers/jimeng-video.js";
 
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
@@ -650,6 +651,8 @@ async function runJob(job, serverUrl) {
   const platform = job.platform || "gpt";
   if (platform === "gpt") {
     await runGptJob(job, serverUrl);
+  } else if (platform === "jimeng_image") {
+    await runJimengImageJob(job, serverUrl);
   } else if (platform === "jimeng_video") {
     await runJimengVideoJob(job, serverUrl);
   } else {
