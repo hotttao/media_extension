@@ -106,15 +106,16 @@ function waitForTabComplete(tabId, timeoutMs = 30000) {
   });
 }
 
-async function openFreshChatWindow() {
+async function openJobTab(job) {
+  const targetUrl = job.targetUrl || chatStartUrl();
   const createdWindow = await chrome.windows.create({
-    url: chatStartUrl(),
+    url: targetUrl,
     type: "normal",
     focused: true,
   });
   const tab = createdWindow.tabs?.[0];
   if (!createdWindow.id || !tab?.id) {
-    throw new Error("Failed to create ChatGPT window");
+    throw new Error("Failed to create window");
   }
   await waitForTabComplete(tab.id);
   await ensureContentScript(tab.id);
@@ -125,7 +126,7 @@ async function runJobInFreshTab(job) {
   let tabId = null;
   let windowId = null;
   try {
-    const freshTarget = await openFreshChatWindow();
+    const freshTarget = await openJobTab(job);
     tabId = freshTarget.tabId;
     windowId = freshTarget.windowId;
     controllerState.currentTabId = tabId;
@@ -322,14 +323,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type === "bridge:fetch") {
+if (message?.type === "bridge:fetch") {
     bridgeFetch(message.request)
       .then((payload) => sendResponse(payload))
       .catch((error) => sendResponse({ ok: false, error: String(error) }));
     return true;
   }
 
-  return false;
+  if (message?.type === "popup:cancelAll") {
+    const { platform } = message;
+    try {
+      const resp = await fetch(`${controllerState.serverUrl}/v1/jobs/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform }),
+      });
+      const result = await resp.json();
+      sendResponse({ ok: true, result });
+    } catch (error) {
+      sendResponse({ ok: false, error: String(error) });
+    }
+    return true;
+  }
 });
 
 loadSettings().then(broadcastState);
