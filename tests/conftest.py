@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-FIXTURE_ROOT = pathlib.Path(__file__).parent.parent / "fixtures"
+FIXTURE_ROOT = pathlib.Path(__file__).parent / "fixtures"
 JIMENG_IMAGE_CASE = FIXTURE_ROOT / "cases" / "jimeng_image_case"
 JIMENG_VIDEO_CASE = FIXTURE_ROOT / "cases" / "jimeng_video_case"
 GPT_CASE = FIXTURE_ROOT / "cases" / "gpt_case"

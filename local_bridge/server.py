@@ -327,10 +327,13 @@ def public_media_ai(media_ai: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def load_media_ai_sidecar(case_path: pathlib.Path) -> dict[str, Any] | None:
-    sidecar_path = case_path.with_suffix(".media-ai.json")
+    sidecar_path = case_path.parent / (".media-ai.json")
     if not sidecar_path.exists():
         return None
-    return json.loads(sidecar_path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(sidecar_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_index: int = 1) -> list[Job]:
