@@ -153,7 +153,7 @@ class Job:
     media_ai: dict[str, Any] | None = None
 
     def to_public_dict(self, base_url: str) -> dict[str, Any]:
-        return {
+        result = {
             "id": self.id,
             "caseFile": str(self.case_file),
             "prompt": self.prompt,
@@ -169,6 +169,12 @@ class Job:
             ],
             "timeoutSeconds": 900,
         }
+        # Add platform and targetUrl if set on the job
+        if hasattr(self, "platform") and self.platform:
+            result["platform"] = self.platform
+        if hasattr(self, "target_url") and self.target_url:
+            result["targetUrl"] = self.target_url
+        return result
 
 
 class JobStore:
