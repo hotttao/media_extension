@@ -151,6 +151,8 @@ class Job:
     worker_id: str | None = None
     progress: list[dict[str, Any]] = field(default_factory=list)
     media_ai: dict[str, Any] | None = None
+    platform: str | None = None
+    target_url: str | None = None
 
     def to_public_dict(self, base_url: str) -> dict[str, Any]:
         result = {
@@ -170,10 +172,16 @@ class Job:
             "timeoutSeconds": 900,
         }
         # Add platform and targetUrl if set on the job
-        if hasattr(self, "platform") and self.platform:
+        if self.platform:
             result["platform"] = self.platform
-        if hasattr(self, "target_url") and self.target_url:
+        if self.target_url:
             result["targetUrl"] = self.target_url
+        # Add styleImageId and sceneId from media_ai sidecar for job tracking
+        if self.media_ai:
+            if self.media_ai.get("styleImageId"):
+                result["styleImageId"] = self.media_ai["styleImageId"]
+            if self.media_ai.get("sceneId"):
+                result["sceneId"] = self.media_ai["sceneId"]
         return result
 
 
@@ -333,6 +341,19 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
         media_ai = load_media_ai_sidecar(case_path)
         job_id = f"{index:03d}-{sanitize_slug(case_path.stem)}-{timestamp}"
         job_output_dir = output_root / job_id
+
+        # Determine platform and targetUrl from media_ai kind
+        platform: str | None = None
+        target_url: str | None = None
+        if media_ai:
+            kind = media_ai.get("kind") or ""
+            if kind in ("jimeng_image", "jimeng-video", "jimeng_video", "jimeng-image"):
+                platform = "jimeng_image"
+                target_url = "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
+            elif kind in ("jimeng_video",):
+                platform = "jimeng_video"
+                target_url = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
+
         jobs.append(
             Job(
                 id=job_id,
@@ -341,6 +362,8 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
                 assets=assets,
                 output_dir=job_output_dir,
                 media_ai=media_ai,
+                platform=platform,
+                target_url=target_url,
             )
         )
     return jobs
@@ -470,6 +493,13 @@ def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[s
             "composition": job.media_ai.get("composition"),
             "imageUrl": image_url,
         }
+        save_url = f"{base_url}/api/products/{product_id}/first-frame"
+    elif kind in ("jimeng_image",):
+        # Jimeng image generation: save with ipId to first_frames table
+        ip_id = ensure_text(job.media_ai.get("ipId") or "")
+        if not ip_id:
+            raise RuntimeError("Media AI jimeng_image sidecar requires ipId.")
+        save_body = {"ipId": ip_id, "imageUrl": image_url}
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     else:
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
