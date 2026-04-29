@@ -1331,10 +1331,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             product_id = payload.get("productId")
             ip_id = payload.get("ipId")
             first_frame_id = payload.get("firstFrameId")
-            movement = payload.get("movement", "").strip()
+            movement_id = payload.get("movementId")
             force = bool(payload.get("force", False))
             prompt_text = payload.get("prompt", "").strip() or None
-            log_info("request productId=%s ipId=%s firstFrameId=%s", product_id, ip_id, first_frame_id)
+            log_info("request productId=%s ipId=%s firstFrameId=%s movementId=%s", product_id, ip_id, first_frame_id, movement_id)
 
             if not product_id:
                 send_json(self, HTTPStatus.BAD_REQUEST, {"error": "productId is required"})
@@ -1380,8 +1380,6 @@ class RequestHandler(BaseHTTPRequestHandler):
             lines = [f"# jimeng video / product {resolved_product_id}"]
             if first_frame_path and first_frame_path.exists():
                 lines.extend(["", f"[首帧图]({first_frame_path.relative_to(task_dir).as_posix()})", ""])
-            if movement:
-                lines.extend(["", f"动作描述: {movement}", ""])
             lines.extend(["", prompt_text, ""])
             case_path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -1396,8 +1394,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 sidecar["ipId"] = resolved_ip_id
             if resolved_first_frame_id:
                 sidecar["firstFrameId"] = resolved_first_frame_id
-            if movement:
-                sidecar["movement"] = movement
+            if movement_id:
+                sidecar["movementId"] = movement_id
             if cookie and not payload.get("noEmbedCookie"):
                 sidecar["cookie"] = cookie
             case_path.with_suffix(".media-ai.json").write_text(
