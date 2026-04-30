@@ -76,6 +76,14 @@ function chatStartUrl() {
   return "https://chatgpt.com/images";
 }
 
+function jobDefaultUrl(job) {
+  const platform = job.platform || "gpt";
+  if (platform === "jimeng_image" || platform === "jimeng_video") {
+    return "https://jimeng.jianying.com/";
+  }
+  return chatStartUrl();
+}
+
 function waitForTabComplete(tabId, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -97,7 +105,7 @@ function waitForTabComplete(tabId, timeoutMs = 30000) {
 }
 
 async function openJobTab(job) {
-  const targetUrl = job.targetUrl || chatStartUrl();
+  const targetUrl = job.targetUrl || jobDefaultUrl(job);
   const createdWindow = await chrome.windows.create({
     url: targetUrl,
     type: "normal",
