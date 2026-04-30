@@ -138,6 +138,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--style-image-ids-file")
     parser.add_argument("--scene-id", action="append", help="Scene ID. Can be passed multiple times.")
     parser.add_argument("--scene-ids-file")
+    parser.add_argument("--pose-id", action="append", help="Pose ID. Can be passed multiple times.")
+    parser.add_argument("--pose-ids-file")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--output-root", default=f"runs/media-ai-jimeng-image-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
@@ -195,6 +197,19 @@ def main() -> int:
     scene_ids: set[str] = set(args.scene_id or [])
     if args.scene_ids_file:
         scene_ids.update(load_ids(args.scene_ids_file))
+
+    # Resolve pose IDs
+    pose_ids: set[str] = set(args.pose_id or [])
+    if args.pose_ids_file:
+        pose_ids.update(load_ids(args.pose_ids_file))
+
+    # Fetch poses
+    poses: dict[str, dict] = {}
+    if pose_ids:
+        for pose_id in pose_ids:
+            pose = client.fetch_pose(pose_id)
+            if pose:
+                poses[str(pose.get("id") or "")] = pose
 
     task_paths: list[pathlib.Path] = []
     skipped: list[dict[str, Any]] = []
@@ -279,74 +294,99 @@ def main() -> int:
             scene_name_val = _scene_name(scene)
             scene_url_val = _scene_url(scene)
 
-            # Build task directory
-            task_dir = output_root / (
-                f"{slugify(product_name)}-{product_id[:8]}__"
-                f"jimeng-{style_image_id[:8]}__"
-                f"scene-{slugify(scene_name_val)}-{scene_id[:8]}"
-            )
-            assets_dir = task_dir / "assets"
-            assets_dir.mkdir(parents=True, exist_ok=True)
+            # Determine which poses to use
+            if pose_ids:
+                poses_to_use = [(pid, poses.get(pid)) for pid in pose_ids if poses.get(pid)]
+            else:
+                poses_to_use = [(None, None)]  # No pose substitution
 
-            # Download 3 reference images
-            ip_media_url = resolve_media_url(client.media_base_url, str(ip_full_body_url))
-            main_media_url = resolve_media_url(client.media_base_url, main_image_url)
-            scene_media_url = resolve_media_url(client.media_base_url, scene_url_val)
+            for pose_id, pose in poses_to_use:
+                # Build effective prompt with pose description
+                effective_prompt = prompt
+                if pose:
+                    pose_name = str(pose.get("name") or "")
+                    pose_desc = str(pose.get("description") or pose.get("prompt") or pose_name)
+                    if pose_desc and pose_name:
+                        effective_prompt = effective_prompt.replace("{pose_description}", pose_desc)
+                        effective_prompt = effective_prompt.replace("{pose_name}", pose_name)
 
-            ip_path = assets_dir / f"ip-full-body{extension_from_url(ip_media_url)}"
-            main_path = assets_dir / f"product-main{extension_from_url(main_media_url)}"
-            scene_path = assets_dir / f"scene-reference{extension_from_url(scene_media_url)}"
+                # Build task directory
+                dir_parts = [
+                    f"{slugify(product_name)}-{product_id[:8]}",
+                    f"jimeng-{style_image_id[:8]}",
+                    f"scene-{slugify(scene_name_val)}-{scene_id[:8]}",
+                ]
+                if pose_id:
+                    dir_parts.append(f"pose-{slugify(pose_name)}-{pose_id[:8]}")
+                task_dir = output_root / "__".join(dir_parts)
+                assets_dir = task_dir / "assets"
+                assets_dir.mkdir(parents=True, exist_ok=True)
 
-            try:
-                client.download_file(ip_media_url, ip_path, cookie=cookie)
-                client.download_file(main_media_url, main_path, cookie=cookie)
-                client.download_file(scene_media_url, scene_path, cookie=cookie)
-            except Exception as e:
-                skipped.append({
+                # Download 3 reference images
+                ip_media_url = resolve_media_url(client.media_base_url, str(ip_full_body_url))
+                main_media_url = resolve_media_url(client.media_base_url, main_image_url)
+                scene_media_url = resolve_media_url(client.media_base_url, scene_url_val)
+
+                ip_path = assets_dir / f"ip-full-body{extension_from_url(ip_media_url)}"
+                main_path = assets_dir / f"product-main{extension_from_url(main_media_url)}"
+                scene_path = assets_dir / f"scene-reference{extension_from_url(scene_media_url)}"
+
+                try:
+                    client.download_file(ip_media_url, ip_path, cookie=cookie)
+                    client.download_file(main_media_url, main_path, cookie=cookie)
+                    client.download_file(scene_media_url, scene_path, cookie=cookie)
+                except Exception as e:
+                    skipped.append({
+                        "styleImageId": style_image_id,
+                        "sceneId": scene_id,
+                        "poseId": pose_id,
+                        "reason": f"download_failed: {e}",
+                    })
+                    print(f"[SKIP] {style_image_id} / {scene_id} / pose {pose_id} download failed: {e}")
+                    continue
+
+                # Write task.md
+                lines = [
+                    f"# {product_name} / jimeng / {scene_name_val}",
+                    "",
+                    f"[图片一：人物]({ip_path.relative_to(task_dir).as_posix()})",
+                    f"[图片二：服装]({main_path.relative_to(task_dir).as_posix()})",
+                    f"[图片三：场景]({scene_path.relative_to(task_dir).as_posix()})",
+                    "",
+                    effective_prompt,
+                    "",
+                ]
+                case_path = task_dir / "task.md"
+                case_path.write_text("\n".join(lines), encoding="utf-8")
+
+                # Write .media-ai.json sidecar
+                sidecar: dict[str, Any] = {
+                    "kind": "jimeng_image",
+                    "baseUrl": base_url,
+                    "productId": product_id,
+                    "productName": product_name,
+                    "ipId": ip_id,
                     "styleImageId": style_image_id,
+                    "styleImageUrl": ip_media_url,
                     "sceneId": scene_id,
-                    "reason": f"download_failed: {e}",
-                })
-                print(f"[SKIP] {style_image_id} / {scene_id} download failed: {e}")
-                continue
+                    "sceneName": scene_name_val,
+                    "sceneUrl": scene_media_url,
+                    "uploadSubDir": "first-frames",
+                }
+                if pose_id:
+                    sidecar["poseId"] = pose_id
+                    sidecar["poseName"] = pose_name
+                    sidecar["poseDescription"] = pose_desc
+                if cookie and not args.no_embed_cookie:
+                    sidecar["cookie"] = cookie
+                case_path.with_suffix(".media-ai.json").write_text(
+                    json.dumps(sidecar, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
 
-            # Write task.md
-            lines = [
-                f"# {product_name} / jimeng / {scene_name_val} 即梦生图",
-                "",
-                f"[图片一：人物]({ip_path.relative_to(task_dir).as_posix()})",
-                f"[图片二：服装]({main_path.relative_to(task_dir).as_posix()})",
-                f"[图片三：场景]({scene_path.relative_to(task_dir).as_posix()})",
-                "",
-                prompt,
-                "",
-            ]
-            case_path = task_dir / "task.md"
-            case_path.write_text("\n".join(lines), encoding="utf-8")
-
-            # Write .media-ai.json sidecar
-            sidecar: dict[str, Any] = {
-                "kind": "jimeng_image",
-                "baseUrl": base_url,
-                "productId": product_id,
-                "productName": product_name,
-                "ipId": ip_id,
-                "styleImageId": style_image_id,
-                "styleImageUrl": ip_media_url,
-                "sceneId": scene_id,
-                "sceneName": scene_name_val,
-                "sceneUrl": scene_media_url,
-                "uploadSubDir": "first-frames",
-            }
-            if cookie and not args.no_embed_cookie:
-                sidecar["cookie"] = cookie
-            case_path.with_suffix(".media-ai.json").write_text(
-                json.dumps(sidecar, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-
-            task_paths.append(case_path)
-            print(f"[TASK] {style_image_id} / {scene_id} {scene_name_val} -> {case_path}")
+                task_paths.append(case_path)
+                pose_label = f" pose-{pose_id[:8]}" if pose_id else ""
+                print(f"[TASK] {style_image_id} / {scene_id} {scene_name_val}{pose_label} -> {case_path}")
 
     manifest = {
         "createdAt": datetime.now().isoformat(timespec="seconds"),
