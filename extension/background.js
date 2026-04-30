@@ -357,6 +357,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === "test:step") {
     const { platform, step } = message;
+
+    // S1 (nav) opens a new tab directly - no content script needed
+    if (step === "s1_nav") {
+      const targetUrl = platform === "jimeng_image" || platform === "jimeng_video"
+        ? "https://jimeng.jianying.com/"
+        : "https://chatgpt.com/images";
+      chrome.tabs.create({ url: targetUrl, active: true }, (tab) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+        } else {
+          sendResponse({ ok: true, result: "Opening " + targetUrl + " tabId=" + tab.id });
+        }
+      });
+      return true;
+    }
+
+    // For S2-S8, relay to the active tab's content script
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0 || !tabs[0].id) {
         sendResponse({ ok: false, error: "No active tab found" });
@@ -364,7 +381,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       chrome.tabs.sendMessage(tabs[0].id, { type: "test:step", platform, step }, (resp) => {
         if (chrome.runtime.lastError) {
-          sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+          sendResponse({ ok: false, error: "Content script not loaded: " + chrome.runtime.lastError.message + ". Make sure you're on the target page." });
         } else {
           sendResponse(resp || { ok: false, error: "No response from content script" });
         }
