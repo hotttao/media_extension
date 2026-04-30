@@ -783,14 +783,43 @@ async function runTestStep(platform, step) {
       return "ERROR: 图片生成 tab not found. all tabs=" + Array.from(document.querySelectorAll("*")).filter(el => el.childNodes.length === 1 && el.textContent?.trim().includes("图片")).map(el => el.tagName + ":" + el.textContent?.trim()).join(", ");
     }
     case "s3_model": {
-      const models = Array.from(document.querySelectorAll("*")).filter(el =>
-        el.textContent?.trim().includes("图片5.0 Lite 9:16 2K") && isVisible(el)
-      );
-      if (models.length > 0) {
-        models[0].click();
-        return "OK: Found and clicked model. count=" + models.length;
+      // Model is likely a dropdown - click to open model selector
+      const allEls = Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
+
+      // Look for model selector button/dropdown (usually shows current model name)
+      const modelBtn = allEls.find(el => {
+        const text = el.textContent?.trim() || "";
+        return (text.includes("5.0") || text.includes("Lite") || text.includes("模型") || text.includes("图片模型")) && el.tagName !== "BODY";
+      });
+
+      if (modelBtn) {
+        modelBtn.click();
+        await delay(500);
+        // After clicking, list the model options in dropdown
+        const dropdownEls = Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
+        const modelOptions = dropdownEls.filter(el => {
+          const text = el.textContent?.trim() || "";
+          return text.includes("5.0") || text.includes("Lite") || text.includes("Pro") || text.includes("Seedance");
+        });
+        if (modelOptions.length > 0) {
+          return "OK: Clicked model button. Found " + modelOptions.length + " options. First: " + modelOptions[0].textContent?.trim().slice(0, 60);
+        }
+        return "OK: Clicked model button. No dropdown options found yet.";
       }
-      return "ERROR: Model not found";
+
+      // Try to find any clickable model area
+      const clickable = allEls.find(el => {
+        const text = el.textContent?.trim() || "";
+        return el.tagName === "DIV" || el.tagName === "SPAN" || el.tagName === "BUTTON";
+      });
+      if (clickable) {
+        clickable.click();
+        await delay(500);
+      }
+
+      // List visible text for debugging
+      const visibleTexts = allEls.map(el => el.tagName + "[" + el.textContent?.trim().slice(0, 30) + "]").filter(t => t.length > 10).slice(0, 25);
+      return "DEBUG: page text sample: " + JSON.stringify(visibleTexts);
     }
     case "s4_upload": {
       return "OK: Upload test ready. This step would upload 3 reference images in full flow.";
