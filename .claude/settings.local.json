@@ -26,7 +26,27 @@
       "Bash(git fetch:*)",
       "Bash(git ls-tree:*)",
       "Bash(.venv/Scripts/Activate.ps1)",
-      "Bash(source .venv/Scripts/activate)"
+      "Bash(source .venv/Scripts/activate)",
+      "Bash(ls D:/Code/media/gpt_image2/*.py)",
+      "Bash(git:*)",
+      "Bash(pip install:*)",
+      "Bash(.venv/Scripts/python.exe -m pip install pytest -q)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_utils.py -v)",
+      "Bash(python3 -m pip install pytest -q)",
+      "Bash(python3 -m pytest tests/test_utils.py -v)",
+      "Bash(py -3 -m pytest tests/test_utils.py -v)",
+      "Bash(python3:*)",
+      "Bash(where python:*)",
+      "Bash(ls /e/Python*/python.exe)",
+      "Bash(cmd /c \"python3 -m pytest tests\\\\\\\\test_utils.py -v\")",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_file_processing.py -v 2>&1)",
+      "Bash(.venv/Scripts/pip.exe install:*)",
+      "Bash(uv pip:*)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_file_processing.py -v)",
+      "Bash(.venv/Scripts/python.exe -c \"\nfrom pathlib import Path\nimport sys\nsys.path.insert\\(0, 'D:/Code/media/gpt_image2'\\)\nfrom local_bridge.server import load_media_ai_sidecar\n\np = Path\\('D:/Code/media/gpt_image2/tests/fixtures/cases/jimeng_image_case/task.md'\\)\nprint\\('input:', p\\)\nprint\\('parent:', p.parent\\)\nsidecar = p.parent / '.media-ai.json'\nprint\\('sidecar path:', sidecar\\)\nprint\\('exists:', sidecar.exists\\(\\)\\)\nresult = load_media_ai_sidecar\\(p\\)\nprint\\('result:', result\\)\n\")",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(.venv/Scripts/python.exe -c \"\nimport sys, os\nprint\\('cwd:', os.getcwd\\(\\)\\)\nFIXTURE_ROOT = __import__\\('pathlib'\\).Path\\('tests'\\) / 'fixtures'\nprint\\('FIXTURE_ROOT:', FIXTURE_ROOT.resolve\\(\\)\\)\nprint\\('sidecar exists:', \\(FIXTURE_ROOT / 'cases' / 'jimeng_image_case' / '.media-ai.json'\\).exists\\(\\)\\)\n\nsys.path.insert\\(0, str\\(Path\\('.'\\).resolve\\(\\)\\)\\)\nfrom local_bridge.server import load_media_ai_sidecar\np = FIXTURE_ROOT / 'cases' / 'jimeng_image_case' / 'task.md'\nprint\\('load_media_ai_sidecar result:', load_media_ai_sidecar\\(p\\)\\)\n\")",
+      "Bash(find .venv/Lib -name server*.pyc)"
     ]
   }
 }
