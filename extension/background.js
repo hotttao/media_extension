@@ -323,7 +323,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-if (message?.type === "bridge:fetch") {
+  if (message?.type === "bridge:fetch") {
     bridgeFetch(message.request)
       .then((payload) => sendResponse(payload))
       .catch((error) => sendResponse({ ok: false, error: String(error) }));
