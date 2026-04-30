@@ -747,5 +747,74 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "test:step") {
+    const { platform, step } = message;
+    runTestStep(platform, step)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
+
   return false;
 });
+
+async function runTestStep(platform, step) {
+  if (platform !== "jimeng_image") {
+    return "ERROR: Only jimeng_image supported for now";
+  }
+
+  switch (step) {
+    case "s1_nav": {
+      const target = "https://jimeng.jianying.com/";
+      if (window.location.href !== target) {
+        window.location.href = target;
+        return "Navigating to jimeng.jianying.com...";
+      }
+      return "Already on jimeng page: " + window.location.href;
+    }
+    case "s2_tab": {
+      const tabs = Array.from(document.querySelectorAll("*")).filter(el =>
+        el.childNodes.length === 1 && el.textContent?.trim() === "图片生成" && isVisible(el)
+      );
+      if (tabs.length > 0) {
+        tabs[0].click();
+        return "OK: Found and clicked 图片生成 tab. tabs count=" + tabs.length;
+      }
+      return "ERROR: 图片生成 tab not found. all tabs=" + Array.from(document.querySelectorAll("*")).filter(el => el.childNodes.length === 1 && el.textContent?.trim().includes("图片")).map(el => el.tagName + ":" + el.textContent?.trim()).join(", ");
+    }
+    case "s3_model": {
+      const models = Array.from(document.querySelectorAll("*")).filter(el =>
+        el.textContent?.trim().includes("图片5.0 Lite 9:16 2K") && isVisible(el)
+      );
+      if (models.length > 0) {
+        models[0].click();
+        return "OK: Found and clicked model. count=" + models.length;
+      }
+      return "ERROR: Model not found";
+    }
+    case "s4_upload": {
+      return "OK: Upload test ready. This step would upload 3 reference images in full flow.";
+    }
+    case "s5_prompt": {
+      return "OK: Prompt test ready. This step would fill prompt text in full flow.";
+    }
+    case "s6_generate": {
+      const btns = Array.from(document.querySelectorAll("button")).filter(el =>
+        el.textContent?.trim().includes("生成") && isVisible(el) && !el.disabled
+      );
+      if (btns.length > 0) {
+        btns[0].click();
+        return "OK: Clicked 生成 button. count=" + btns.length;
+      }
+      return "ERROR: Generate button not found";
+    }
+    case "s7_wait": {
+      return "OK: Wait test ready. This step would poll for 8s stable results in full flow.";
+    }
+    case "s8_report": {
+      return "OK: Report test ready. This step would postJson result in full flow.";
+    }
+    default:
+      return "ERROR: Unknown step: " + step;
+  }
+}

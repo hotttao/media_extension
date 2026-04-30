@@ -6,7 +6,7 @@
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
-        width: 360px;
+        width: 380px;
         padding: 12px;
         font-family: "Segoe UI", sans-serif;
         background: #f5f1e8;
@@ -28,7 +28,7 @@
         font-size: 14px;
       }
       .platform-body { padding: 10px 14px; }
-      .actions { display: flex; gap: 6px; margin-bottom: 8px; }
+      .actions { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
       button {
         padding: 6px 14px;
         border: 0;
@@ -40,6 +40,8 @@
       }
       button.secondary { background: #8e6d3f; }
       button.danger { background: #9a1c1c; }
+      button.test-btn { background: #2563eb; font-size: 11px; padding: 4px 10px; }
+      button.test-btn:hover { background: #1d4ed8; }
       button:disabled { opacity: 0.5; cursor: not-allowed; }
       .stats {
         display: flex;
@@ -58,6 +60,32 @@
         text-overflow: ellipsis;
       }
       .error-line { color: #9a1c1c; font-size: 11px; margin-top: 2px; }
+      .test-panel {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed #e6dac7;
+      }
+      .test-panel-label {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+      .test-steps { display: flex; gap: 4px; flex-wrap: wrap; }
+      .test-result {
+        margin-top: 6px;
+        padding: 6px 8px;
+        background: #f0f9ff;
+        border-radius: 6px;
+        font-size: 11px;
+        color: #1e40af;
+        max-height: 60px;
+        overflow-y: auto;
+      }
+      .test-result.error {
+        background: #fef2f2;
+        color: #991b1b;
+      }
     </style>
   </head>
   <body>
