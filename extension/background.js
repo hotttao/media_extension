@@ -34,16 +34,6 @@ function setStatus(message, error = null) {
   broadcastState();
 }
 
-async function findChatTab() {
-  const tabs = await chrome.tabs.query({});
-  const candidates = tabs.filter((tab) => {
-    return typeof tab.url === "string" && (tab.url.startsWith("https://chatgpt.com/") || tab.url.startsWith("https://chat.openai.com/"));
-  });
-
-  const activeCandidate = candidates.find((tab) => tab.active);
-  return activeCandidate || candidates[0] || null;
-}
-
 async function claimJob() {
   const response = await fetch(`${controllerState.serverUrl}/v1/job/claim`, {
     headers: {
@@ -122,9 +112,13 @@ async function openJobTab(job) {
   return { tabId: tab.id, windowId: createdWindow.id };
 }
 
+const JOB_RUN_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes per job
+
 async function runJobInFreshTab(job) {
   let tabId = null;
   let windowId = null;
+  let jobTimedOut = false;
+
   try {
     const freshTarget = await openJobTab(job);
     tabId = freshTarget.tabId;
@@ -134,11 +128,21 @@ async function runJobInFreshTab(job) {
     controllerState.busy = true;
     setStatus(`Running ${job.id}`);
 
-    await chrome.tabs.sendMessage(tabId, {
-      type: "controller:runSingleJob",
-      serverUrl: controllerState.serverUrl,
-      job,
+    // Send job with timeout wrapper
+    const sendJobWithTimeout = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        jobTimedOut = true;
+        reject(new Error(`Job ${job.id} timed out after ${JOB_RUN_TIMEOUT_MS / 1000}s`));
+      }, JOB_RUN_TIMEOUT_MS);
+
+      chrome.tabs.sendMessage(tabId, {
+        type: "controller:runSingleJob",
+        serverUrl: controllerState.serverUrl,
+        job,
+      }).then(resolve).catch(reject).finally(() => clearTimeout(timeout));
     });
+
+    await sendJobWithTimeout;
   } finally {
     if (windowId !== null) {
       await chrome.windows.remove(windowId).catch(() => {});
@@ -332,17 +336,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === "popup:cancelAll") {
     const { platform } = message;
-    try {
-      const resp = await fetch(`${controllerState.serverUrl}/v1/jobs/cancel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform }),
-      });
-      const result = await resp.json();
-      sendResponse({ ok: true, result });
-    } catch (error) {
-      sendResponse({ ok: false, error: String(error) });
-    }
+    fetch(`${controllerState.serverUrl}/v1/jobs/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ platform }),
+    })
+      .then((resp) => resp.json())
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
     return true;
   }
 });
