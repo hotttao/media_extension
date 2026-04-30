@@ -826,65 +826,72 @@ async function runTestStep(platform, step) {
       return "OK: Selected 图片生成 from dropdown. tabs count=" + dropdownTriggers.length;
     }
     case "s3_model": {
-      // Model dropdown: model name (图片5.0 Lite), ratio (9:16), resolution (2K)
       const allEls = () => Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
+      const delayMs = 300;
 
-      // Step 1: Find and click the model dropdown trigger (look for text containing model name or "Model")
-      const trigger = allEls().find(el => {
-        const text = el.textContent?.trim() || "";
-        return text.includes("5.0") || text.includes("Lite") || text.includes("模型") || text.includes("9:16") || text.includes("2K");
-      });
+      // Step 1: Click "图片4.6" combobox to open model dropdown
+      const modelCombobox = allEls().find(el =>
+        el.getAttribute("role") === "combobox" && el.textContent?.trim().includes("4.6")
+      );
+      if (!modelCombobox) {
+        return "ERROR: model combobox not found";
+      }
+      modelCombobox.click();
+      await delay(delayMs);
 
-      if (!trigger) {
-        const samples = allEls().map(el => el.tagName + ":[" + el.textContent?.trim().slice(0, 25) + "]").filter(t => t.length > 8).slice(0, 20);
-        return "DEBUG: No model trigger found. Page text: " + JSON.stringify(samples);
+      // Select 图片5.0 Lite from dropdown
+      const liteOption = allEls().find(el =>
+        el.textContent?.trim().includes("5.0") && el.textContent?.trim().includes("Lite")
+      );
+      if (liteOption && liteOption !== modelCombobox) {
+        liteOption.click();
+        await delay(delayMs);
+      } else {
+        // Try clicking by text content in open dropdown
+        const dropdownItems = allEls().filter(el =>
+          el.textContent?.trim() === "图片5.0 Lite" || el.textContent?.trim().includes("5.0")
+        );
+        if (dropdownItems.length > 0) dropdownItems[0].click();
+        await delay(delayMs);
       }
 
-      // Click first to open dropdown
-      trigger.click();
-      await delay(300);
-
-      // Step 2: Select 图片5.0 Lite (model name)
-      const modelOption = allEls().find(el => {
-        const text = el.textContent?.trim() || "";
-        return text.includes("5.0") || text.includes("Lite");
-      });
-      if (modelOption && modelOption !== trigger) {
-        modelOption.click();
-        await delay(200);
+      // Step 2: Click the "3:2" button to open ratio dropdown
+      const ratioBtn = allEls().find(el =>
+        el.tagName === "BUTTON" && el.textContent?.trim().includes("3:2")
+      );
+      if (!ratioBtn) {
+        return "ERROR: ratio button not found. Current button text: " + allEls().find(el => el.tagName === "BUTTON")?.textContent?.trim();
       }
+      ratioBtn.click();
+      await delay(delayMs);
 
-      // Step 3: Select 9:16 (ratio)
-      const ratioOption = allEls().find(el => {
-        const text = el.textContent?.trim() || "";
-        return text === "9:16" || text.includes("9:16");
-      });
+      // Select 9:16
+      const ratioOption = allEls().find(el =>
+        el.textContent?.trim() === "9:16" || el.textContent?.trim().includes("9:16")
+      );
       if (ratioOption) {
         ratioOption.click();
-        await delay(200);
-      } else {
-        // Try clicking the ratio area directly if dropdown is still open
-        const ratioArea = allEls().find(el => el.textContent?.trim().includes("9:16"));
-        if (ratioArea && ratioArea !== trigger) ratioArea.click();
-        await delay(200);
+        await delay(delayMs);
       }
 
-      // Step 4: Select 2K (resolution)
-      const resOption = allEls().find(el => {
-        const text = el.textContent?.trim() || "";
-        return text === "2K" || text.includes("2K") || text === "2k";
-      });
-      if (resOption) {
-        resOption.click();
-        await delay(200);
-      } else {
-        const resArea = allEls().find(el => el.textContent?.trim().includes("2K"));
-        if (resArea && resArea !== trigger) resArea.click();
+      // Step 3: Click again to open resolution dropdown and select 2K
+      const resBtn = allEls().find(el =>
+        el.tagName === "BUTTON" && el.textContent?.trim().includes("2K")
+      );
+      if (resBtn) {
+        resBtn.click();
+        await delay(delayMs);
+        const resOption = allEls().find(el =>
+          el.textContent?.trim() === "2K" || el.textContent?.trim() === "2k"
+        );
+        if (resOption) resOption.click();
+        await delay(delayMs);
       }
 
-      // Confirm selections
-      const afterText = trigger.textContent?.trim() || "";
-      return "OK: Model dropdown completed. Current display: " + afterText.slice(0, 80);
+      // Report current state
+      const modelText = modelCombobox?.textContent?.trim() || "";
+      const ratioText = ratioBtn?.textContent?.trim() || "";
+      return "OK: Model= " + modelText + ", Ratio/Res= " + ratioText;
     }
     case "s4_upload": {
       return "OK: Upload test ready. This step would upload 3 reference images in full flow.";
