@@ -37,7 +37,6 @@
       "js": [
         "content-script.js"
       ],
-      "type": "module",
       "run_at": "document_idle"
     }
   ]
