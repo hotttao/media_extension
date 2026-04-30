@@ -354,6 +354,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch((error) => sendResponse({ ok: false, error: String(error) }));
     return true;
   }
+
+  if (message?.type === "test:step") {
+    const { platform, step } = message;
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length === 0 || !tabs[0].id) {
+        sendResponse({ ok: false, error: "No active tab found" });
+        return;
+      }
+      chrome.tabs.sendMessage(tabs[0].id, { type: "test:step", platform, step }, (resp) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+        } else {
+          sendResponse(resp || { ok: false, error: "No response from content script" });
+        }
+      });
+    });
+    return true;
+  }
 });
 
 loadSettings().then(broadcastState);
