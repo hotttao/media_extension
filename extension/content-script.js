@@ -1,6 +1,19 @@
-import { runGptJob } from "./content-handlers/gpt.js";
-import { runJimengImageJob } from "./content-handlers/jimeng-image.js";
-import { runJimengVideoJob } from "./content-handlers/jimeng-video.js";
+// Dynamic imports for platform handlers
+let runGptJob, runJimengImageJob, runJimengVideoJob;
+let handlersLoaded = false;
+
+async function ensureHandlersLoaded() {
+  if (handlersLoaded) return;
+  const [gpt, jimengImage, jimengVideo] = await Promise.all([
+    import("./content-handlers/gpt.js"),
+    import("./content-handlers/jimeng-image.js"),
+    import("./content-handlers/jimeng-video.js"),
+  ]);
+  runGptJob = gpt.runGptJob;
+  runJimengImageJob = jimengImage.runJimengImageJob;
+  runJimengVideoJob = jimengVideo.runJimengVideoJob;
+  handlersLoaded = true;
+}
 
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 const SUBMISSION_EFFECT_TIMEOUT_MS = 120 * 1000;
@@ -648,6 +661,7 @@ function stopController() {
 }
 
 async function runJob(job, serverUrl) {
+  await ensureHandlersLoaded();
   const platform = job.platform || "gpt";
   if (platform === "gpt") {
     await runGptJob(job, serverUrl);
