@@ -773,53 +773,118 @@ async function runTestStep(platform, step) {
       return "Already on jimeng page: " + window.location.href;
     }
     case "s2_tab": {
-      const tabs = Array.from(document.querySelectorAll("*")).filter(el =>
-        el.childNodes.length === 1 && el.textContent?.trim() === "图片生成" && isVisible(el)
+      // First click: open the dropdown that contains "图片生成"
+      const dropdownTriggers = Array.from(document.querySelectorAll("*")).filter(el =>
+        isVisible(el) && (el.textContent?.trim() === "图片生成" || el.textContent?.trim() === "视频生成")
       );
-      if (tabs.length > 0) {
-        tabs[0].click();
-        return "OK: Found and clicked 图片生成 tab. tabs count=" + tabs.length;
+
+      // Find the parent trigger (usually a div/button that opens the dropdown)
+      const dropdownTrigger = dropdownTriggers.length > 0 ? dropdownTriggers[0] : null;
+
+      if (!dropdownTrigger) {
+        // List what's visible for debugging
+        const allVisible = Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
+        const samples = allVisible.map(el => el.tagName + ":[" + el.textContent?.trim().slice(0, 30) + "]").filter(t => t.length > 10).slice(0, 20);
+        return "ERROR: 图片生成 not found. Sample: " + JSON.stringify(samples);
       }
-      return "ERROR: 图片生成 tab not found. all tabs=" + Array.from(document.querySelectorAll("*")).filter(el => el.childNodes.length === 1 && el.textContent?.trim().includes("图片")).map(el => el.tagName + ":" + el.textContent?.trim()).join(", ");
+
+      // Check if this is already an open dropdown option or a trigger
+      // If it looks like a menu item, click it; otherwise click its parent to open dropdown first
+      const parentClickable = dropdownTrigger.parentElement;
+      const isMenuItem = parentClickable && (parentClickable.getAttribute("role")?.includes("menu") || parentClickable.className?.includes("menu") || parentClickable.tagName === "LI");
+
+      if (!isMenuItem && dropdownTrigger.textContent?.trim() === "图片生成") {
+        // Likely a trigger, click parent first
+        if (parentClickable && isVisible(parentClickable)) {
+          parentClickable.click();
+          await delay(500);
+          // Now click the actual option
+          const secondClick = Array.from(document.querySelectorAll("*")).find(el =>
+            el.textContent?.trim() === "图片生成" && isVisible(el) && el !== dropdownTrigger
+          );
+          if (secondClick) {
+            secondClick.click();
+            return "OK: Opened dropdown, then selected 图片生成. Parent was " + parentClickable.tagName;
+          }
+          return "OK: Clicked trigger " + parentClickable.tagName + ", dropdown opened.";
+        }
+        // Click the element itself to open dropdown
+        dropdownTrigger.click();
+        await delay(500);
+        const option = Array.from(document.querySelectorAll("*")).find(el =>
+          el.textContent?.trim() === "图片生成" && isVisible(el) && el !== dropdownTrigger
+        );
+        if (option) {
+          option.click();
+          return "OK: Clicked element, then selected 图片生成.";
+        }
+        return "OK: Clicked trigger. Options should be visible now.";
+      }
+
+      // It's a menu item inside an open dropdown
+      dropdownTrigger.click();
+      return "OK: Selected 图片生成 from dropdown. tabs count=" + dropdownTriggers.length;
     }
     case "s3_model": {
-      // Model is likely a dropdown - click to open model selector
-      const allEls = Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
+      // Model dropdown: model name (图片5.0 Lite), ratio (9:16), resolution (2K)
+      const allEls = () => Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
 
-      // Look for model selector button/dropdown (usually shows current model name)
-      const modelBtn = allEls.find(el => {
+      // Step 1: Find and click the model dropdown trigger (look for text containing model name or "Model")
+      const trigger = allEls().find(el => {
         const text = el.textContent?.trim() || "";
-        return (text.includes("5.0") || text.includes("Lite") || text.includes("模型") || text.includes("图片模型")) && el.tagName !== "BODY";
+        return text.includes("5.0") || text.includes("Lite") || text.includes("模型") || text.includes("9:16") || text.includes("2K");
       });
 
-      if (modelBtn) {
-        modelBtn.click();
-        await delay(500);
-        // After clicking, list the model options in dropdown
-        const dropdownEls = Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
-        const modelOptions = dropdownEls.filter(el => {
-          const text = el.textContent?.trim() || "";
-          return text.includes("5.0") || text.includes("Lite") || text.includes("Pro") || text.includes("Seedance");
-        });
-        if (modelOptions.length > 0) {
-          return "OK: Clicked model button. Found " + modelOptions.length + " options. First: " + modelOptions[0].textContent?.trim().slice(0, 60);
-        }
-        return "OK: Clicked model button. No dropdown options found yet.";
+      if (!trigger) {
+        const samples = allEls().map(el => el.tagName + ":[" + el.textContent?.trim().slice(0, 25) + "]").filter(t => t.length > 8).slice(0, 20);
+        return "DEBUG: No model trigger found. Page text: " + JSON.stringify(samples);
       }
 
-      // Try to find any clickable model area
-      const clickable = allEls.find(el => {
+      // Click first to open dropdown
+      trigger.click();
+      await delay(300);
+
+      // Step 2: Select 图片5.0 Lite (model name)
+      const modelOption = allEls().find(el => {
         const text = el.textContent?.trim() || "";
-        return el.tagName === "DIV" || el.tagName === "SPAN" || el.tagName === "BUTTON";
+        return text.includes("5.0") || text.includes("Lite");
       });
-      if (clickable) {
-        clickable.click();
-        await delay(500);
+      if (modelOption && modelOption !== trigger) {
+        modelOption.click();
+        await delay(200);
       }
 
-      // List visible text for debugging
-      const visibleTexts = allEls.map(el => el.tagName + "[" + el.textContent?.trim().slice(0, 30) + "]").filter(t => t.length > 10).slice(0, 25);
-      return "DEBUG: page text sample: " + JSON.stringify(visibleTexts);
+      // Step 3: Select 9:16 (ratio)
+      const ratioOption = allEls().find(el => {
+        const text = el.textContent?.trim() || "";
+        return text === "9:16" || text.includes("9:16");
+      });
+      if (ratioOption) {
+        ratioOption.click();
+        await delay(200);
+      } else {
+        // Try clicking the ratio area directly if dropdown is still open
+        const ratioArea = allEls().find(el => el.textContent?.trim().includes("9:16"));
+        if (ratioArea && ratioArea !== trigger) ratioArea.click();
+        await delay(200);
+      }
+
+      // Step 4: Select 2K (resolution)
+      const resOption = allEls().find(el => {
+        const text = el.textContent?.trim() || "";
+        return text === "2K" || text.includes("2K") || text === "2k";
+      });
+      if (resOption) {
+        resOption.click();
+        await delay(200);
+      } else {
+        const resArea = allEls().find(el => el.textContent?.trim().includes("2K"));
+        if (resArea && resArea !== trigger) resArea.click();
+      }
+
+      // Confirm selections
+      const afterText = trigger.textContent?.trim() || "";
+      return "OK: Model dropdown completed. Current display: " + afterText.slice(0, 80);
     }
     case "s4_upload": {
       return "OK: Upload test ready. This step would upload 3 reference images in full flow.";
