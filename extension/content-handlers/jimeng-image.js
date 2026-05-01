@@ -134,13 +134,14 @@ export async function runJimengImageJob(job, serverUrl) {
     // Step 3: Select "图片5.0 Lite" model and "9:16 2K" ratio/resolution
     await record("Selecting model 图片5.0 Lite and ratio 9:16 resolution 2K");
 
-    // Click model combobox to open dropdown
+    // Click model combobox to open dropdown (find the one with "图片5.0 Lite" text)
     const allText = document.querySelectorAll("*");
     let modelCombobox = null;
     for (const el of allText) {
       const role = el.getAttribute("role");
       const text = el.textContent?.trim() || "";
-      if (role === "combobox" && (text.includes("4.6") || text.includes("5.0"))) {
+      // Must match exactly "图片5.0 Lite" - avoid picking "图片生成" which also contains "5.0"
+      if (role === "combobox" && text === "图片5.0 Lite") {
         modelCombobox = el;
         break;
       }
@@ -171,10 +172,11 @@ export async function runJimengImageJob(job, serverUrl) {
     await page.keyboard.press("Escape");
     await delay(300);
 
-    // Click ratio/resolution button (shows "智能比例 高清 2K") to open popover
+    // Click ratio/resolution button (shows "1:1 高清 2K" for 图片5.0 Lite) to open popover
     let ratioTarget = null;
     for (const el of allEls) {
-      if (el.tagName === "BUTTON" && el.textContent?.trim().includes("智能比例")) {
+      // 图片5.0 Lite shows "1:1 高清 2K", original model shows "智能比例 高清 2K"
+      if (el.tagName === "BUTTON" && el.textContent?.trim().match(/1:1|智能比例/)) {
         ratioTarget = el;
         break;
       }
