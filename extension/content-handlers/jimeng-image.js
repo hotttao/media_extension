@@ -13,6 +13,54 @@
  * 9. Serialize and report results
  */
 
+// Re-export helpers from content-script via window (injected at runtime)
+const controllerState = {}; // local fallback
+const notifyProgress = () => { throw new Error("not injected"); };
+const sendProgress = () => { throw new Error("not injected"); };
+const delay = (ms) => new Promise(r => setTimeout(r, ms));
+const isVisible = (el) => {
+  if (!el) return false;
+  const style = window.getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden") return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+};
+const waitFor = async (predicate, options = {}) => {
+  const timeoutMs = options.timeoutMs ?? 120000;
+  const intervalMs = options.intervalMs ?? 250;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = predicate();
+    if (value) return value;
+    await delay(intervalMs);
+  }
+  throw new Error(`Timed out waiting for ${options.label || "condition"}`);
+};
+const fetchAssetAsFile = async (asset) => {
+  const response = await bridgeFetch({ url: asset.url, responseType: "blobBase64" });
+  const binary = atob(response.base64Data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const mimeType = asset.mimeType || response.mimeType || "application/octet-stream";
+  return new File([bytes], asset.name, { type: mimeType });
+};
+const postJson = async (url, payload) => {
+  const resp = await bridgeFetch({ url, method: "POST", headers: { "Content-Type": "application/json" }, body: payload, responseType: "json" });
+  return resp.json;
+};
+const bridgeFetch = (request) => chrome.runtime.sendMessage({ type: "bridge:fetch", request }).then(r => { if (!r.ok) throw new Error(r.error); return r; });
+const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    const result = String(reader.result || "");
+    const idx = result.indexOf(",");
+    resolve(idx >= 0 ? result.slice(idx + 1) : result);
+  };
+  reader.onerror = reject;
+  reader.readAsDataURL(blob);
+});
+const extensionFromMimeType = (mimeType) => ({ "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif" }[mimeType] || ".png");
+
 export async function runJimengImageJob(job, serverUrl) {
   const logs = [];
 
@@ -83,47 +131,77 @@ export async function runJimengImageJob(job, serverUrl) {
     }
     await delay(1000);
 
-    // Step 3: Select "图片5.0 Lite 9:16 2K" model
-    await record("Selecting model 图片5.0 Lite 9:16 2K");
-    const modelCandidates = () => {
-      const allText = document.querySelectorAll("*");
-      const results = [];
-      for (const el of allText) {
-        if (el.textContent?.trim().includes("图片5.0 Lite 9:16 2K")) {
-          results.push(el);
-        }
-      }
-      return results;
-    };
+    // Step 3: Select "图片5.0 Lite" model and "9:16 2K" ratio/resolution
+    await record("Selecting model 图片5.0 Lite and ratio 9:16 resolution 2K");
 
-    let modelEl = null;
-    const modelOptions = modelCandidates();
-    for (const opt of modelOptions) {
-      if (isVisible(opt)) {
-        modelEl = opt;
+    // Click model combobox to open dropdown
+    const allText = document.querySelectorAll("*");
+    let modelCombobox = null;
+    for (const el of allText) {
+      const role = el.getAttribute("role");
+      const text = el.textContent?.trim() || "";
+      if (role === "combobox" && (text.includes("4.6") || text.includes("5.0"))) {
+        modelCombobox = el;
         break;
       }
     }
-
-    if (!modelEl) {
-      // Try clicking by text content
-      const clicked = await document.evaluate(() => {
-        const elements = document.querySelectorAll("*");
-        for (const el of elements) {
-          if (el.textContent?.trim().includes("图片5.0 Lite 9:16 2K")) {
-            el.click();
-            return true;
-          }
-        }
-        return false;
-      });
-      if (!clicked) {
-        throw new Error("Model 图片5.0 Lite 9:16 2K not found");
-      }
-    } else {
-      modelEl.click();
-    }
+    if (!modelCombobox) throw new Error("Model combobox not found");
+    modelCombobox.click();
     await delay(500);
+
+    // Wait for listbox dropdown
+    const listbox = await waitFor(() => document.querySelector('[role="listbox"]'), { timeoutMs: 5000, label: "model listbox" });
+    if (!listbox) throw new Error("Model listbox not visible");
+    await delay(300);
+
+    // Click 图片5.0 Lite option
+    const allEls = document.querySelectorAll("*");
+    let liteOption = null;
+    for (const el of allEls) {
+      if (el.getAttribute("role") === "option" && el.textContent?.trim().includes("5.0") && el.textContent?.trim().includes("Lite")) {
+        liteOption = el;
+        break;
+      }
+    }
+    if (!liteOption) throw new Error("图片5.0 Lite option not found");
+    liteOption.click();
+    await delay(500);
+
+    // Close dropdown with Escape key
+    await page.keyboard.press("Escape");
+    await delay(300);
+
+    // Click ratio/resolution button (shows "智能比例 高清 2K") to open popover
+    let ratioTarget = null;
+    for (const el of allEls) {
+      if (el.tagName === "BUTTON" && el.textContent?.trim().includes("智能比例")) {
+        ratioTarget = el;
+        break;
+      }
+    }
+    if (!ratioTarget) throw new Error("Ratio button not found");
+    ratioTarget.click();
+    await delay(500);
+
+    // Click ratio 9:16 and resolution 2k (radios are in DOM, hidden)
+    const allRadios = Array.from(document.querySelectorAll('input[type="radio"]'));
+    let ratioSelected = false;
+    let resSelected = false;
+    for (const radio of allRadios) {
+      if (radio.value === "9:16") {
+        radio.click();
+        ratioSelected = true;
+      }
+      if (radio.value === "2k") {
+        radio.click();
+        resSelected = true;
+      }
+    }
+    if (!ratioSelected) throw new Error("Ratio 9:16 not found");
+    if (!resSelected) throw new Error("Resolution 2k not found");
+
+    await delay(300);
+    await record("Model and ratio/resolution selected");
 
     // Step 4: Upload 3 reference images
     await record("Uploading reference images");

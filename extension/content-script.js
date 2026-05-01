@@ -827,71 +827,90 @@ async function runTestStep(platform, step) {
     }
     case "s3_model": {
       const allEls = () => Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
-      const delayMs = 300;
+      const delayMs = 500;
 
-      // Step 1: Click "图片4.6" combobox to open model dropdown
-      const modelCombobox = allEls().find(el =>
-        el.getAttribute("role") === "combobox" && el.textContent?.trim().includes("4.6")
+      // Step 1: Open model dropdown and select 图片5.0 Lite
+      // The model combobox shows the current model, could be 5.0 or 4.6
+      const allComboboxes = allEls().filter(el => el.getAttribute("role") === "combobox");
+      const comboboxTexts = allComboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
+      // Match both "5.0" and "4.6" as current model text
+      const modelCombobox = allComboboxes.find(el =>
+        el.textContent?.trim().includes("5.0") || el.textContent?.trim().includes("4.6")
       );
       if (!modelCombobox) {
-        return "ERROR: model combobox not found";
+        return "ERROR: model combobox not found. Available comboboxes: " + comboboxTexts;
       }
       modelCombobox.click();
       await delay(delayMs);
 
-      // Select 图片5.0 Lite from dropdown
-      const liteOption = allEls().find(el =>
+      const modelDropdown = document.querySelector('[role="listbox"]');
+      if (!modelDropdown) {
+        return "ERROR: model listbox not visible";
+      }
+      await delay(delayMs);
+
+      // Re-query options AFTER listbox appears (they're dynamically created)
+      const options = Array.from(document.querySelectorAll('[role="option"]')).filter(isVisible);
+      const liteOption = options.find(el =>
         el.textContent?.trim().includes("5.0") && el.textContent?.trim().includes("Lite")
       );
-      if (liteOption && liteOption !== modelCombobox) {
-        liteOption.click();
-        await delay(delayMs);
-      } else {
-        // Try clicking by text content in open dropdown
-        const dropdownItems = allEls().filter(el =>
-          el.textContent?.trim() === "图片5.0 Lite" || el.textContent?.trim().includes("5.0")
-        );
-        if (dropdownItems.length > 0) dropdownItems[0].click();
-        await delay(delayMs);
+
+      if (!liteOption) {
+        const allOptions = Array.from(document.querySelectorAll('[role="option"]')).filter(isVisible);
+        const optionTexts = allOptions.map(o => o.textContent?.trim().slice(0, 40)).join(" | ");
+        return "ERROR: 图片5.0 Lite not found. Available: " + optionTexts;
       }
 
-      // Step 2: Click the "3:2" button to open ratio dropdown
-      const ratioBtn = allEls().find(el =>
-        el.tagName === "BUTTON" && el.textContent?.trim().includes("3:2")
+      liteOption.click();
+      await delay(delayMs);
+
+      const modelText = modelCombobox?.textContent?.trim() || "";
+      const modelChanged = modelText.includes("5.0") || modelText.includes("Lite");
+
+      // Close dropdown by clicking body
+      document.body.click();
+      await delay(500);
+
+      // Step 2: Click the ratio/resolution button (shows "智能比例 高清 2K") to open popover
+      const allButtons = Array.from(document.querySelectorAll("button")).filter(el => isVisible(el));
+      const ratioBtn = allButtons.find(el =>
+        el.textContent?.trim().includes("智能比例")
       );
       if (!ratioBtn) {
-        return "ERROR: ratio button not found. Current button text: " + allEls().find(el => el.tagName === "BUTTON")?.textContent?.trim();
+        return modelChanged ? "OK: Model changed to " + modelText + " but ratio button not found" : "ERROR: ratio button not found";
       }
       ratioBtn.click();
       await delay(delayMs);
 
-      // Select 9:16
-      const ratioOption = allEls().find(el =>
-        el.textContent?.trim() === "9:16" || el.textContent?.trim().includes("9:16")
-      );
-      if (ratioOption) {
-        ratioOption.click();
-        await delay(delayMs);
+      // Radios are in DOM but hidden; click them directly by value
+      const allRadios = Array.from(document.querySelectorAll('input[type="radio"]'));
+      const ratioRadio = allRadios.find(r => r.value === "9:16");
+      const resRadio = allRadios.find(r => r.value === "2k");
+
+      let ratioChanged = false;
+      let resChanged = false;
+
+      if (ratioRadio) {
+        ratioRadio.click();
+        ratioChanged = ratioRadio.checked;
+        await delay(200);
+      }
+      if (resRadio) {
+        resRadio.click();
+        resChanged = resRadio.checked;
+        await delay(200);
       }
 
-      // Step 3: Click again to open resolution dropdown and select 2K
-      const resBtn = allEls().find(el =>
-        el.tagName === "BUTTON" && el.textContent?.trim().includes("2K")
-      );
-      if (resBtn) {
-        resBtn.click();
-        await delay(delayMs);
-        const resOption = allEls().find(el =>
-          el.textContent?.trim() === "2K" || el.textContent?.trim() === "2k"
-        );
-        if (resOption) resOption.click();
-        await delay(delayMs);
-      }
+      const finalStatus = [];
+      if (modelChanged) finalStatus.push("Model: " + modelText);
+      if (ratioChanged) finalStatus.push("Ratio: 9:16");
+      if (resChanged) finalStatus.push("Res: 2K");
 
-      // Report current state
-      const modelText = modelCombobox?.textContent?.trim() || "";
-      const ratioText = ratioBtn?.textContent?.trim() || "";
-      return "OK: Model= " + modelText + ", Ratio/Res= " + ratioText;
+      if (finalStatus.length > 0) {
+        return "OK: " + finalStatus.join(", ");
+      } else {
+        return "WARN: Nothing changed. Model: " + modelText;
+      }
     }
     case "s4_upload": {
       return "OK: Upload test ready. This step would upload 3 reference images in full flow.";

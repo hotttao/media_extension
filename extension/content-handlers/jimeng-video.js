@@ -12,6 +12,52 @@
  * 8. Serialize and report results
  */
 
+// Re-export helpers from content-script via window (injected at runtime)
+const notifyProgress = () => { throw new Error("not injected"); };
+const sendProgress = () => { throw new Error("not injected"); };
+const delay = (ms) => new Promise(r => setTimeout(r, ms));
+const isVisible = (el) => {
+  if (!el) return false;
+  const style = window.getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden") return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+};
+const waitFor = async (predicate, options = {}) => {
+  const timeoutMs = options.timeoutMs ?? 120000;
+  const intervalMs = options.intervalMs ?? 250;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = predicate();
+    if (value) return value;
+    await delay(intervalMs);
+  }
+  throw new Error(`Timed out waiting for ${options.label || "condition"}`);
+};
+const fetchAssetAsFile = async (asset) => {
+  const response = await bridgeFetch({ url: asset.url, responseType: "blobBase64" });
+  const binary = atob(response.base64Data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const mimeType = asset.mimeType || response.mimeType || "application/octet-stream";
+  return new File([bytes], asset.name, { type: mimeType });
+};
+const postJson = async (url, payload) => {
+  const resp = await bridgeFetch({ url, method: "POST", headers: { "Content-Type": "application/json" }, body: payload, responseType: "json" });
+  return resp.json;
+};
+const bridgeFetch = (request) => chrome.runtime.sendMessage({ type: "bridge:fetch", request }).then(r => { if (!r.ok) throw new Error(r.error); return r; });
+const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    const result = String(reader.result || "");
+    const idx = result.indexOf(",");
+    resolve(idx >= 0 ? result.slice(idx + 1) : result);
+  };
+  reader.onerror = reject;
+  reader.readAsDataURL(blob);
+});
+
 export async function runJimengVideoJob(job, serverUrl) {
   const logs = [];
 
