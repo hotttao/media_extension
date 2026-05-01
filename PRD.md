@@ -73,6 +73,7 @@ submit_media_ai_style_images 有问题，提交任务后等待执行完成的超
     - 人物: ip_id
     - 服装: product_id
     - 场景: scene_id
+    - 姿势: pose_id
   输出:
     - 四张图片，保存到 first_frames 表中
 2. 生视频任务: 需要上传首帧图，动作描述和提示词 @prompts/06_文生视频提示词.md 

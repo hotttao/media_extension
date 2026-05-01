@@ -46,7 +46,22 @@
       "Bash(.venv/Scripts/python.exe -c \"\nfrom pathlib import Path\nimport sys\nsys.path.insert\\(0, 'D:/Code/media/gpt_image2'\\)\nfrom local_bridge.server import load_media_ai_sidecar\n\np = Path\\('D:/Code/media/gpt_image2/tests/fixtures/cases/jimeng_image_case/task.md'\\)\nprint\\('input:', p\\)\nprint\\('parent:', p.parent\\)\nsidecar = p.parent / '.media-ai.json'\nprint\\('sidecar path:', sidecar\\)\nprint\\('exists:', sidecar.exists\\(\\)\\)\nresult = load_media_ai_sidecar\\(p\\)\nprint\\('result:', result\\)\n\")",
       "Bash(.venv/Scripts/python.exe:*)",
       "Bash(.venv/Scripts/python.exe -c \"\nimport sys, os\nprint\\('cwd:', os.getcwd\\(\\)\\)\nFIXTURE_ROOT = __import__\\('pathlib'\\).Path\\('tests'\\) / 'fixtures'\nprint\\('FIXTURE_ROOT:', FIXTURE_ROOT.resolve\\(\\)\\)\nprint\\('sidecar exists:', \\(FIXTURE_ROOT / 'cases' / 'jimeng_image_case' / '.media-ai.json'\\).exists\\(\\)\\)\n\nsys.path.insert\\(0, str\\(Path\\('.'\\).resolve\\(\\)\\)\\)\nfrom local_bridge.server import load_media_ai_sidecar\np = FIXTURE_ROOT / 'cases' / 'jimeng_image_case' / 'task.md'\nprint\\('load_media_ai_sidecar result:', load_media_ai_sidecar\\(p\\)\\)\n\")",
-      "Bash(find .venv/Lib -name server*.pyc)"
+      "Bash(find .venv/Lib -name server*.pyc)",
+      "mcp__context7__resolve-library-id",
+      "Bash(node --check extension/background.js)",
+      "Bash(xargs grep:*)",
+      "Bash(cd:*)",
+      "Bash(pkill -f \"python.*local_bridge\")",
+      "Bash(node --check extension/content-handlers/gpt.js)",
+      "Bash(node --check extension/content-handlers/jimeng-image.js)",
+      "Bash(node --check extension/content-handlers/jimeng-video.js)",
+      "Bash(node --check extension/popup.js)",
+      "Bash(npx playwright:*)",
+      "Bash(npm list:*)",
+      "Bash(ls *.spec.*)",
+      "Bash(node:*)",
+      "Bash(npx -y playwright install chromium)",
+      "Bash(npm install:*)"
     ]
   }
 }

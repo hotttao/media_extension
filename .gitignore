@@ -5,3 +5,5 @@ __pycache__/
 
 .env
 docs/feishu
+
+node_modules/
