@@ -161,7 +161,7 @@
     } catch {
       const comboboxes = allEls().filter(el => el.getAttribute("role") === "combobox");
       const comboboxTexts = comboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
-      return { ok: false, data: { comboboxTexts }, error: "Model combobox not found (timed out waiting)" };
+      throw new Error(`Model combobox not found (timed out waiting, found: ${comboboxTexts})`);
     }
 
     const comboboxes = allEls().filter(el => el.getAttribute("role") === "combobox");
@@ -169,14 +169,21 @@
     const modelCombobox = comboboxes.find(el =>
       el.textContent?.trim().includes("5.0") || el.textContent?.trim().includes("4.6")
     );
-    if (!modelCombobox) return { ok: false, data: { comboboxTexts }, error: "Model combobox not found" };
+    if (!modelCombobox) {
+      const comboboxes2 = allEls().filter(el => el.getAttribute("role") === "combobox");
+      const comboboxTexts = comboboxes2.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
+      throw new Error(`Model combobox not found (checked for 5.0/4.6, found: ${comboboxTexts})`);
+    }
 
     modelCombobox.click();
     await delay(delayMs);
     console.log("[stepModel] clicked model combobox");
 
     const listbox = document.querySelector('[role="listbox"]');
-    if (!listbox) return { ok: false, data: null, error: "Model listbox not visible" };
+    if (!listbox) {
+      const allListboxes = Array.from(document.querySelectorAll('[role="listbox"]')).map(el => el.textContent?.trim().slice(0, 40)).join(" | ");
+      throw new Error(`Model listbox not visible after combobox click (checked role=listbox, found: ${allListboxes || "none"})`);
+    }
     await delay(delayMs);
 
     const options = Array.from(document.querySelectorAll('[role="option"]')).filter(isVisible);
@@ -186,7 +193,7 @@
     );
     if (!liteOption) {
       const optionTexts = options.map(o => o.textContent?.trim().slice(0, 40)).join(" | ");
-      return { ok: false, data: { optionTexts }, error: "图片5.0 Lite not found" };
+      throw new Error(`图片5.0 Lite not found (options: ${optionTexts})`);
     }
 
     liteOption.click();
@@ -196,7 +203,7 @@
 
     const modelText = modelCombobox?.textContent?.trim() || "";
     const modelChanged = modelText.includes("5.0") || modelText.includes("Lite");
-    if (!modelChanged) return { ok: false, data: { modelText }, error: "Model combobox text unchanged" };
+    if (!modelChanged) throw new Error(`Model combobox text unchanged after click (current: ${modelText})`);
     return { ok: true, data: { modelText }, error: null };
   }
 
@@ -215,7 +222,10 @@
       const hasIntelligent = text.includes("\u667A\u80FD\u6BD4\u4F8B");
       return hasResolution && (hasRatioDigit || hasIntelligent);
     });
-    if (!ratioBtn) return { ok: false, data: null, error: "Ratio button not found" };
+    if (!ratioBtn) {
+      const allBtns = allButtons().map(el => el.textContent?.trim().slice(0, 40)).join(" | ");
+      throw new Error(`Ratio button not found (checked for K+ratio/intelligent, buttons: ${allBtns})`);
+    }
 
     ratioBtn.click();
     await delay(delayMs);
@@ -256,7 +266,7 @@
     document.body.click();
     await delay(300);
 
-    if (!ratioChanged) return { ok: false, data: null, error: "Ratio 9:16 not selected" };
+    if (!ratioChanged) throw new Error("Ratio 9:16 not selected (tried button click and radio input)");
     return { ok: true, data: { ratio: "9:16", resolution: resChanged ? "2K" : null }, error: null };
   }
 
@@ -370,7 +380,7 @@
         }
       }
 
-      return { ok: false, data: { label: asset.label }, error: `Failed to upload: ${asset.label}` };
+      throw new Error(`Failed to upload: ${asset.label} (all upload methods exhausted)`);
     }
 
     return { ok: true, data: { count: job.assets?.length ?? 0 }, error: null };
@@ -409,7 +419,7 @@
     }
     if (!promptEl && promptEls.length > 0) promptEl = promptEls[0];
 
-    if (!promptEl) return { ok: false, data: null, error: "Prompt input not found" };
+    if (!promptEl) throw new Error(`Prompt input not found (tried: textarea, input[placeholder*=描述], contenteditable, tiptap; visible count: ${promptEls.length})`);
 
     console.log("[stepPrompt] using prompt element:", promptEl.tagName, promptEl.className?.slice(0, 30), "placeholder:", promptEl.getAttribute("placeholder"), "contenteditable:", promptEl.getAttribute("contenteditable"));
 
@@ -440,7 +450,10 @@
       textIncludes(el.textContent, "生成") && !el.disabled
     );
 
-    if (btns.length === 0) return { ok: false, data: null, error: "Generate button not found" };
+    if (btns.length === 0) {
+      const allBtns = allButtons().map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
+      throw new Error(`Generate button not found (checked for 按钮 with 生成, all: ${allBtns})`);
+    }
 
     // Prefer the button whose text is exactly "生成" or starts with "生成"
     // and has a distinct appearance (larger, prominent placement)

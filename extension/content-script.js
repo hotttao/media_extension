@@ -729,6 +729,16 @@ async function pollForJobs() {
 
   try {
     await runJob(payload.job, controllerState.serverUrl);
+  } catch (error) {
+    const reason = String(error);
+    controllerState.lastError = reason;
+    if (controllerState.currentJobId) {
+      try {
+        await postJson(`${controllerState.serverUrl}/v1/job/${encodeURIComponent(controllerState.currentJobId)}/fail`, { reason });
+      } catch (_failError) {
+        // Ignore bridge errors
+      }
+    }
   } finally {
     clearHeartbeat();
     controllerState.busy = false;
@@ -768,10 +778,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         controllerState.currentJobId = null;
         sendResponse({ ok: true, state: { ...controllerState } });
       })
-      .catch((error) => {
+      .catch(async (error) => {
+        const reason = String(error);
+        controllerState.lastError = reason;
+        controllerState.lastMessage = `Failed ${controllerState.currentJobId || "job"}: ${reason}`;
+        // Sync failure to bridge so job status is marked failed with reason
+        if (controllerState.currentJobId) {
+          try {
+            await postJson(
+              `${controllerState.serverUrl}/v1/job/${encodeURIComponent(controllerState.currentJobId)}/fail`,
+              { reason }
+            );
+          } catch (_failError) {
+            // Bridge call failed — still report to caller
+          }
+        }
         controllerState.busy = false;
         controllerState.currentJobId = null;
-        sendResponse({ ok: false, error: String(error), state: { ...controllerState } });
+        sendResponse({ ok: false, error: reason, state: { ...controllerState } });
       });
     return true;
   }
