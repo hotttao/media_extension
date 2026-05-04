@@ -113,14 +113,20 @@ def create_jimeng_image(body: JimengImageCreateRequest, request: Request):
     lines.extend(["", prompt_text, ""])
     case_path.write_text("\n".join(lines), encoding="utf-8")
 
+    style_image_url = ""
+    if style_image:
+        style_image_url = resolve_media_url(client.media_base_url, str(style_image.get("url") or ""))
+
     sidecar: dict = {
         "kind": "jimeng-image",
         "baseUrl": client.base_url,
         "productId": resolved_product_id,
         "productName": product_name,
         "ipId": resolved_ip_id,
+        "ipImageUrl": ip_media_url,
+        "productImageUrl": main_media_url,
         "styleImageId": style_image_id,
-        "styleImageUrl": ip_media_url,
+        "styleImageUrl": style_image_url,
         "uploadSubDir": "first-frames",
     }
     if resolved_scene_id:
@@ -172,6 +178,7 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
 
     first_frame_url = ""
     first_frame_path = None
+    first_frame_media_url = ""
     if resolved_first_frame_id:
         first_frame = client.fetch_first_frame(resolved_first_frame_id)
         if first_frame:
@@ -210,6 +217,9 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
         "kind": "jimeng-video",
         "baseUrl": client.base_url,
         "productId": resolved_product_id,
+        "ipId": resolved_ip_id or None,
+        "firstFrameId": resolved_first_frame_id or None,
+        "firstFrameUrl": first_frame_media_url if first_frame_media_url else "",
         "uploadSubDir": "videos",
     }
     if resolved_ip_id:

@@ -173,6 +173,7 @@ def main() -> int:
             "ipId": ip_id,
             "firstFrameId": first_frame_id,
             "firstFrameUrl": media_url,
+            "uploadSubDir": "videos",
             "movement": movement_text,
         }
         if pose_ids:

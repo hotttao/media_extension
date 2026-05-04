@@ -131,6 +131,7 @@ class JobStore:
                                 "label": a["label"],
                                 "name": a["name"],
                                 "mimeType": a["mimeType"],
+                                "url": f"http://127.0.0.1:8765/v1/assets/{job.id}/{i}",
                             }
                             for i, a in enumerate(job.assets)
                         ],

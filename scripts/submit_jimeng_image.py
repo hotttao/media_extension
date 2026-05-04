@@ -207,6 +207,7 @@ def main() -> int:
                 ip_media_url = resolve_media_url(client.media_base_url, str(ip_full_body_url))
                 main_media_url = resolve_media_url(client.media_base_url, main_image_url)
                 scene_media_url = resolve_media_url(client.media_base_url, scene_url_val)
+                style_image_url = resolve_media_url(client.media_base_url, style_image_url)
 
                 ip_path = assets_dir / f"ip-full-body{extension_from_url(ip_media_url)}"
                 main_path = assets_dir / f"product-main{extension_from_url(main_media_url)}"
@@ -247,8 +248,10 @@ def main() -> int:
                     "productId": product_id,
                     "productName": product_name,
                     "ipId": ip_id,
+                    "ipImageUrl": ip_media_url,
+                    "productImageUrl": main_media_url,
                     "styleImageId": style_image_id,
-                    "styleImageUrl": ip_media_url,
+                    "styleImageUrl": style_image_url,
                     "sceneId": scene_id,
                     "sceneName": scene_name_val,
                     "sceneUrl": scene_media_url,
