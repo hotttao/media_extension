@@ -35,6 +35,7 @@
         "https://jimeng.jianying.com/*"
       ],
       "js": [
+        "jimeng-steps.js",
         "content-script.js"
       ],
       "run_at": "document_idle"

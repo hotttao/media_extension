@@ -65,8 +65,8 @@ class Test_build_jobs:
         case_dir = tmp_path / "case1"
         case_dir.mkdir()
         (case_dir / "task.md").write_text("generate something", encoding="utf-8")
-        (case_dir / ".media-ai.json").write_text(
-            '{"kind": "jimeng_image", "productId": "p1", "ipId": "i1"}',
+        (case_dir / "task.media-ai.json").write_text(
+            '{"kind": "jimeng-image", "productId": "p1", "ipId": "i1"}',
             encoding="utf-8",
         )
 
@@ -83,7 +83,7 @@ class Test_build_jobs:
             d = tmp_path / f"case{i}"
             d.mkdir()
             (d / "task.md").write_text(f"prompt {i}", encoding="utf-8")
-            (d / ".media-ai.json").write_text('{"kind": "jimeng_image", "productId": "p", "ipId": "i"}', encoding="utf-8")
+            (d / "task.media-ai.json").write_text('{"kind": "jimeng-image", "productId": "p", "ipId": "i"}', encoding="utf-8")
 
         jobs = build_jobs([tmp_path / f"case{i}/task.md" for i in range(3)], tmp_path / "output")
         assert len(jobs) == 3
@@ -92,7 +92,7 @@ class Test_build_jobs:
         case_dir = tmp_path / "gpt_case"
         case_dir.mkdir()
         (case_dir / "task.md").write_text("GPT prompt", encoding="utf-8")
-        (case_dir / ".media-ai.json").write_text('{"productId": "p", "ipId": "i"}', encoding="utf-8")
+        (case_dir / "task.media-ai.json").write_text('{"productId": "p", "ipId": "i"}', encoding="utf-8")
 
         jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
         assert len(jobs) == 1
@@ -103,8 +103,8 @@ class Test_build_jobs:
         case_dir = tmp_path / "video_case"
         case_dir.mkdir()
         (case_dir / "task.md").write_text("video prompt", encoding="utf-8")
-        (case_dir / ".media-ai.json").write_text(
-            '{"kind": "jimeng_video", "productId": "p", "ipId": "i", "firstFrameId": "ff"}',
+        (case_dir / "task.media-ai.json").write_text(
+            '{"kind": "jimeng-video", "productId": "p", "ipId": "i", "firstFrameId": "ff"}',
             encoding="utf-8",
         )
 
@@ -125,7 +125,7 @@ class Test_build_jobs:
         case_dir = tmp_path / "case1"
         case_dir.mkdir()
         (case_dir / "task.md").write_text("test", encoding="utf-8")
-        (case_dir / ".media-ai.json").write_text('{"productId": "p", "ipId": "i"}', encoding="utf-8")
+        (case_dir / "task.media-ai.json").write_text('{"productId": "p", "ipId": "i"}', encoding="utf-8")
 
         output_root = tmp_path / "jobs_output"
         jobs = build_jobs([case_dir / "task.md"], output_root)
@@ -135,7 +135,7 @@ class Test_build_jobs:
         case_dir = tmp_path / "case1"
         case_dir.mkdir()
         (case_dir / "task.md").write_text("test", encoding="utf-8")
-        (case_dir / ".media-ai.json").write_text(
+        (case_dir / "task.media-ai.json").write_text(
             '{"kind": "jimeng_image", "productId": "p", "ipId": "i", "styleImageId": "s1"}',
             encoding="utf-8",
         )
@@ -143,3 +143,60 @@ class Test_build_jobs:
         jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
         assert jobs[0].media_ai is not None
         assert jobs[0].media_ai["styleImageId"] == "s1"
+    def test_style_image_kind_maps_to_jimeng_platform(self, tmp_path: pathlib.Path) -> None:
+        """style-image kind should resolve to jimeng_image platform."""
+        case_dir = tmp_path / "style_case"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("style prompt", encoding="utf-8")
+        (case_dir / "task.media-ai.json").write_text(
+            '{"kind": "style-image", "productId": "p", "ipId": "i", "styleImageId": "s1", "sceneId": "sc1"}',
+            encoding="utf-8",
+        )
+        jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
+        assert len(jobs) == 1
+        assert jobs[0].platform == "jimeng_image"
+        assert jobs[0].target_url == "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
+        assert jobs[0].media_ai["styleImageId"] == "s1"
+
+    def test_model_image_kind_maps_to_jimeng_platform(self, tmp_path: pathlib.Path) -> None:
+        """model-image kind should resolve to jimeng_image platform."""
+        case_dir = tmp_path / "model_case"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("model prompt", encoding="utf-8")
+        (case_dir / "task.media-ai.json").write_text(
+            '{"kind": "model-image", "productId": "p", "ipId": "i", "modelImageId": "m1"}',
+            encoding="utf-8",
+        )
+        jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
+        assert len(jobs) == 1
+        assert jobs[0].platform == "jimeng_image"
+        assert jobs[0].target_url == "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
+
+    def test_first_frame_image_kind_maps_to_jimeng_platform(self, tmp_path: pathlib.Path) -> None:
+        """first-frame-image kind should resolve to jimeng_image platform."""
+        case_dir = tmp_path / "ff_case"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("first frame prompt", encoding="utf-8")
+        (case_dir / "task.media-ai.json").write_text(
+            '{"kind": "first-frame-image", "productId": "p", "ipId": "i", "styleImageId": "s1", "sceneId": "sc1"}',
+            encoding="utf-8",
+        )
+        jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
+        assert len(jobs) == 1
+        assert jobs[0].platform == "jimeng_image"
+        assert jobs[0].target_url == "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
+
+    def test_wrong_sidecar_name_not_read(self, tmp_path: pathlib.Path) -> None:
+        """Sidecar named .media-ai.json (old buggy name) should NOT be read."""
+        case_dir = tmp_path / "wrong_name_case"
+        case_dir.mkdir()
+        (case_dir / "task.md").write_text("prompt", encoding="utf-8")
+        # Write sidecar with wrong name (old buggy format)
+        (case_dir / ".media-ai.json").write_text(
+            '{"kind": "jimeng_image", "productId": "should_not_be_read"}',
+            encoding="utf-8",
+        )
+        jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
+        # Sidecar should NOT be loaded; media_ai should be None
+        assert jobs[0].media_ai is None
+        assert jobs[0].platform is None

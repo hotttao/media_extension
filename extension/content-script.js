@@ -48,6 +48,40 @@ function isVisible(element) {
   return rect.width > 0 && rect.height > 0;
 }
 
+// Text comparison helpers — compare by character codes to avoid encoding mismatches
+// between JS source (UTF-8) and DOM text content
+function charCodesOf(str) {
+  return Array.from(str).map(c => c.charCodeAt(0));
+}
+function sameChars(a, b) {
+  const ca = charCodesOf(a);
+  const cb = charCodesOf(b);
+  if (ca.length !== cb.length) return false;
+  return ca.every((c, i) => c === cb[i]);
+}
+function textLike(domText, target) {
+  if (!domText) return false;
+  const dt = domText.trim();
+  if (dt === target) return true;
+  return sameChars(dt, target);
+}
+function textIncludes(domText, target) {
+  if (!domText) return false;
+  const dt = domText.trim();
+  if (dt.includes(target)) return true;
+  // Fallback: char-code substring search
+  const dc = charCodesOf(dt);
+  const tc = charCodesOf(target);
+  if (tc.length > dc.length) return false;
+  outer: for (let i = 0; i <= dc.length - tc.length; i++) {
+    for (let j = 0; j < tc.length; j++) {
+      if (dc[i + j] !== tc[j]) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
 function sanitizeText(value, maxLength = 240) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
@@ -763,176 +797,99 @@ async function runTestStep(platform, step) {
     return "ERROR: Only jimeng_image supported for now";
   }
 
+  // Import shared step functions
+  // Shared step functions are on window (set by jimeng-steps.js content script)
   switch (step) {
     case "s1_nav": {
-      const target = "https://jimeng.jianying.com/";
-      if (window.location.href !== target) {
-        window.location.href = target;
-        return "Navigating to jimeng.jianying.com...";
-      }
-      return "Already on jimeng page: " + window.location.href;
+      const target = "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0";
+      const result = await window.stepNav(target);
+      if (!result.ok) return "ERROR: " + result.error;
+      return result.data.status === "navigating" ? "Navigating to jimeng.jianying.com (type=image)..." : "Already on target page: " + result.data.url;
     }
     case "s2_tab": {
-      // First click: open the dropdown that contains "图片生成"
-      const dropdownTriggers = Array.from(document.querySelectorAll("*")).filter(el =>
-        isVisible(el) && (el.textContent?.trim() === "图片生成" || el.textContent?.trim() === "视频生成")
-      );
-
-      // Find the parent trigger (usually a div/button that opens the dropdown)
-      const dropdownTrigger = dropdownTriggers.length > 0 ? dropdownTriggers[0] : null;
-
-      if (!dropdownTrigger) {
-        // List what's visible for debugging
-        const allVisible = Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
-        const samples = allVisible.map(el => el.tagName + ":[" + el.textContent?.trim().slice(0, 30) + "]").filter(t => t.length > 10).slice(0, 20);
-        return "ERROR: 图片生成 not found. Sample: " + JSON.stringify(samples);
-      }
-
-      // Check if this is already an open dropdown option or a trigger
-      // If it looks like a menu item, click it; otherwise click its parent to open dropdown first
-      const parentClickable = dropdownTrigger.parentElement;
-      const isMenuItem = parentClickable && (parentClickable.getAttribute("role")?.includes("menu") || parentClickable.className?.includes("menu") || parentClickable.tagName === "LI");
-
-      if (!isMenuItem && dropdownTrigger.textContent?.trim() === "图片生成") {
-        // Likely a trigger, click parent first
-        if (parentClickable && isVisible(parentClickable)) {
-          parentClickable.click();
-          await delay(500);
-          // Now click the actual option
-          const secondClick = Array.from(document.querySelectorAll("*")).find(el =>
-            el.textContent?.trim() === "图片生成" && isVisible(el) && el !== dropdownTrigger
-          );
-          if (secondClick) {
-            secondClick.click();
-            return "OK: Opened dropdown, then selected 图片生成. Parent was " + parentClickable.tagName;
-          }
-          return "OK: Clicked trigger " + parentClickable.tagName + ", dropdown opened.";
-        }
-        // Click the element itself to open dropdown
-        dropdownTrigger.click();
-        await delay(500);
-        const option = Array.from(document.querySelectorAll("*")).find(el =>
-          el.textContent?.trim() === "图片生成" && isVisible(el) && el !== dropdownTrigger
-        );
-        if (option) {
-          option.click();
-          return "OK: Clicked element, then selected 图片生成.";
-        }
-        return "OK: Clicked trigger. Options should be visible now.";
-      }
-
-      // It's a menu item inside an open dropdown
-      dropdownTrigger.click();
-      return "OK: Selected 图片生成 from dropdown. tabs count=" + dropdownTriggers.length;
+      const result = await window.stepTab();
+      if (!result.ok) return "ERROR: " + result.error;
+      return "OK: Tab ready - " + JSON.stringify(result.data);
     }
     case "s3_model": {
-      const allEls = () => Array.from(document.querySelectorAll("*")).filter(el => isVisible(el));
-      const delayMs = 500;
-
-      // Step 1: Open model dropdown and select 图片5.0 Lite
-      // The model combobox shows the current model, could be 5.0 or 4.6
-      const allComboboxes = allEls().filter(el => el.getAttribute("role") === "combobox");
-      const comboboxTexts = allComboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
-      // Match both "5.0" and "4.6" as current model text
-      const modelCombobox = allComboboxes.find(el =>
-        el.textContent?.trim().includes("5.0") || el.textContent?.trim().includes("4.6")
-      );
-      if (!modelCombobox) {
-        return "ERROR: model combobox not found. Available comboboxes: " + comboboxTexts;
-      }
-      modelCombobox.click();
-      await delay(delayMs);
-
-      const modelDropdown = document.querySelector('[role="listbox"]');
-      if (!modelDropdown) {
-        return "ERROR: model listbox not visible";
-      }
-      await delay(delayMs);
-
-      // Re-query options AFTER listbox appears (they're dynamically created)
-      const options = Array.from(document.querySelectorAll('[role="option"]')).filter(isVisible);
-      const liteOption = options.find(el =>
-        el.textContent?.trim().includes("5.0") && el.textContent?.trim().includes("Lite")
-      );
-
-      if (!liteOption) {
-        const allOptions = Array.from(document.querySelectorAll('[role="option"]')).filter(isVisible);
-        const optionTexts = allOptions.map(o => o.textContent?.trim().slice(0, 40)).join(" | ");
-        return "ERROR: 图片5.0 Lite not found. Available: " + optionTexts;
-      }
-
-      liteOption.click();
-      await delay(delayMs);
-
-      const modelText = modelCombobox?.textContent?.trim() || "";
-      const modelChanged = modelText.includes("5.0") || modelText.includes("Lite");
-
-      // Close dropdown by clicking body
-      document.body.click();
-      await delay(500);
-
-      // Step 2: Click the ratio/resolution button (shows "智能比例 高清 2K") to open popover
-      const allButtons = Array.from(document.querySelectorAll("button")).filter(el => isVisible(el));
-      const ratioBtn = allButtons.find(el =>
-        el.textContent?.trim().includes("智能比例")
-      );
-      if (!ratioBtn) {
-        return modelChanged ? "OK: Model changed to " + modelText + " but ratio button not found" : "ERROR: ratio button not found";
-      }
-      ratioBtn.click();
-      await delay(delayMs);
-
-      // Radios are in DOM but hidden; click them directly by value
-      const allRadios = Array.from(document.querySelectorAll('input[type="radio"]'));
-      const ratioRadio = allRadios.find(r => r.value === "9:16");
-      const resRadio = allRadios.find(r => r.value === "2k");
-
-      let ratioChanged = false;
-      let resChanged = false;
-
-      if (ratioRadio) {
-        ratioRadio.click();
-        ratioChanged = ratioRadio.checked;
-        await delay(200);
-      }
-      if (resRadio) {
-        resRadio.click();
-        resChanged = resRadio.checked;
-        await delay(200);
-      }
-
-      const finalStatus = [];
-      if (modelChanged) finalStatus.push("Model: " + modelText);
-      if (ratioChanged) finalStatus.push("Ratio: 9:16");
-      if (resChanged) finalStatus.push("Res: 2K");
-
-      if (finalStatus.length > 0) {
-        return "OK: " + finalStatus.join(", ");
-      } else {
-        return "WARN: Nothing changed. Model: " + modelText;
-      }
+      const result = await window.stepModel();
+      if (!result.ok) return "ERROR: " + result.error;
+      return "OK: Model changed to " + result.data.modelText;
     }
-    case "s4_upload": {
-      return "OK: Upload test ready. This step would upload 3 reference images in full flow.";
+    case "s4_ratio": {
+      const result = await window.stepRatio();
+      if (!result.ok) return "ERROR: " + result.error;
+      return "OK: Ratio 9:16 selected" + (result.data.resolution ? ", Res 2K" : "");
     }
-    case "s5_prompt": {
-      return "OK: Prompt test ready. This step would fill prompt text in full flow.";
-    }
-    case "s6_generate": {
-      const btns = Array.from(document.querySelectorAll("button")).filter(el =>
-        el.textContent?.trim().includes("生成") && isVisible(el) && !el.disabled
-      );
-      if (btns.length > 0) {
-        btns[0].click();
-        return "OK: Clicked 生成 button. count=" + btns.length;
+    case "s5_upload": {
+      // S5 test — check UI elements are present (full flow uses job.assets)
+      const fileInputs = () => Array.from(document.querySelectorAll("input[type='file']"));
+      const uploadSlots = Array.from(document.querySelectorAll("[data-testid*='upload'], [class*='upload'], [class*='Upload']")).filter(isVisible);
+      const inputs = fileInputs();
+      if (inputs.length > 0 || uploadSlots.length > 0) {
+        return `OK: Upload UI present (${inputs.length} file inputs, ${uploadSlots.length} slots). Full flow uses job assets.`;
       }
-      return "ERROR: Generate button not found";
+      return "WARN: No upload UI found";
     }
-    case "s7_wait": {
-      return "OK: Wait test ready. This step would poll for 8s stable results in full flow.";
+    case "s6_prompt": {
+      // S6 test — check prompt input is present
+      const candidates = Array.from(document.querySelectorAll("textarea, input[placeholder*='描述'], div[contenteditable='true'], div.tiptap"));
+      const visible = candidates.filter(el => el.getAttribute("contenteditable") === "true" || isVisible(el));
+      if (visible.length > 0) return "OK: Prompt input found (" + visible.length + " elements). Full flow uses job.prompt.";
+      return "WARN: No prompt input found";
     }
-    case "s8_report": {
-      return "OK: Report test ready. This step would postJson result in full flow.";
+    case "s7_generate": {
+      const result = await window.stepGenerate();
+      if (!result.ok) return "ERROR: " + result.error;
+      return "OK: Clicked 生成 button. count=" + result.data.count;
+    }
+    case "s8_wait": {
+      const result = await window.stepWait({ timeoutSeconds: 600 });
+      if (!result.ok) return "ERROR: " + result.error;
+      window.__testResultImages = result.data.images;
+      return "OK: Found " + result.data.images.length + " stable image(s). Ready for S9.";
+    }
+    case "s9_report": {
+      const imgs = window.__testResultImages || [];
+      if (imgs.length === 0) return "ERROR: No images from S8. Run S8_wait first.";
+      const serialized = [];
+      for (let i = 0; i < Math.min(imgs.length, 4); i++) {
+        const img = imgs[i];
+        try {
+          const resp = await fetch(img.src, { credentials: "include" });
+          if (!resp.ok) continue;
+          const blob = await resp.blob();
+          const mimeType = blob.type || "image/png";
+          const reader = new FileReader();
+          const base64 = await new Promise((resolve, reject) => {
+            reader.onloadend = () => {
+              const result = String(reader.result || "");
+              const idx = result.indexOf(",");
+              resolve(idx >= 0 ? result.slice(idx + 1) : result);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          const ext = ({ "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" })[mimeType] || ".png";
+          serialized.push({
+            filename: `result-${String(i + 1).padStart(2, "0")}${ext}`,
+            mimeType,
+            base64Data: base64,
+            sourceUrl: img.src,
+          });
+        } catch (err) {
+          return `ERROR: Failed to serialize image ${i + 1}: ${err.message}`;
+        }
+      }
+
+      if (serialized.length === 0) {
+        return "ERROR: No images could be serialized";
+      }
+
+      // For test: just return the serialized result (no real job id to post to)
+      window.__testSerializedImages = serialized;
+      return `OK: Serialized ${serialized.length} image(s). ` +
+        `First: ${serialized[0].filename} (${serialized[0].mimeType}, ${(serialized[0].base64Data.length / 1024).toFixed(1)}KB)`;
     }
     default:
       return "ERROR: Unknown step: " + step;

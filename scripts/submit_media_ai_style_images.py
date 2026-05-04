@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
 
-from submit_media_ai_model_images import (
+from local_bridge.utils import (
     DEFAULT_BASE_URL,
     DEFAULT_BRIDGE_URL,
     download_file,
@@ -21,40 +21,14 @@ from submit_media_ai_model_images import (
     resolve_media_url,
     slugify,
     wait_for_jobs,
+    normalize_list,
+    load_ids,
+    normalize_product_list,
 )
-
 
 from local_bridge.media_ai_client import MediaAIClient
 
 DEFAULT_PROMPT_FILE = pathlib.Path("prompts/04_定妆图.md")
-
-
-def normalize_list(payload: Any, keys: tuple[str, ...], label: str) -> list[dict[str, Any]]:
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
-    if isinstance(payload, dict):
-        for key in keys:
-            value = payload.get(key)
-            if isinstance(value, list):
-                return [item for item in value if isinstance(item, dict)]
-    raise ValueError(f"Cannot find {label} array in response.")
-
-
-def load_ids(path: pathlib.Path) -> list[str]:
-    text = read_text(path)
-    if not text:
-        return []
-    if text.startswith("["):
-        payload = json.loads(text)
-        if not isinstance(payload, list):
-            raise ValueError(f"{path} must contain a JSON array or one id per line.")
-        return [str(item).strip() for item in payload if str(item).strip()]
-    ids: list[str] = []
-    for line in text.splitlines():
-        value = line.split("#", 1)[0].strip()
-        if value:
-            ids.append(value)
-    return ids
 
 
 def fetch_products(args: argparse.Namespace, cookie: str | None) -> list[dict[str, Any]]:
@@ -242,6 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--upload-subdir", default="style-images")
     parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="Print job preview without enqueueing or downloading assets.")
     parser.add_argument("--no-auto-bridge", action="store_true")
     parser.add_argument("--no-wait", action="store_true")
     parser.add_argument("--poll-interval", type=int, default=15)
@@ -332,6 +307,11 @@ def main() -> int:
         return 0
     if args.prepare_only:
         print(f"Prepared {len(task_paths)} task(s).")
+        return 0
+    if args.dry_run:
+        print(f"[DRY-RUN] Would enqueue {len(task_paths)} task(s):")
+        for path in task_paths:
+            print(f"  - {path}")
         return 0
 
     ensure_bridge_running(args)

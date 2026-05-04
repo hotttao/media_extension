@@ -335,7 +335,7 @@ def public_media_ai(media_ai: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def load_media_ai_sidecar(case_path: pathlib.Path) -> dict[str, Any] | None:
-    sidecar_path = case_path.parent / (".media-ai.json")
+    sidecar_path = case_path.with_suffix(".media-ai.json")
     if not sidecar_path.exists():
         return None
     try:
@@ -358,10 +358,10 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
         target_url: str | None = None
         if media_ai:
             kind = media_ai.get("kind") or ""
-            if kind in ("jimeng_image", "jimeng-image"):
+            if kind in ("jimeng-image", "first-frame-image", "style-image", "model-image"):
                 platform = "jimeng_image"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
-            elif kind in ("jimeng_video", "jimeng-video"):
+            elif kind == "jimeng-video":
                 platform = "jimeng_video"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
 
@@ -598,6 +598,17 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self) -> None:
         send_json(self, HTTPStatus.NO_CONTENT, {})
+
+    def _is_dry_run(self) -> bool:
+        parsed = urlparse(self.path)
+        qs = parsed.query
+        return "dry-run" in qs or "dry_run" in qs
+
+    def _strip_dry_run_query(self, path: str) -> str:
+        """Remove dry-run query params before routing."""
+        parsed = urlparse(path)
+        qs = [p for p in parsed.query.split("&") if p and not p.startswith("dry-") and not p.startswith("dry_")]
+        return str(urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, "&".join(qs), parsed.fragment)))
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -932,6 +943,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             ip_id = payload.get("ipId")
             force = bool(payload.get("force", False))
             log_info("request modelImageId=%s productId=%s ipId=%s force=%s", model_image_id, product_id, ip_id, force)
+            dry_run = self._is_dry_run()
+            if dry_run:
+                log_info("dry-run: returning job preview without enqueue")
 
             if not model_image_id and not (product_id and ip_id):
                 log_error("missing required params")
@@ -982,32 +996,45 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                jobs = self.server.store.add_jobs([case_path])
+                if not dry_run:
+                    jobs = self.server.store.add_jobs([case_path])
+                    job = jobs[0]
+                    log_info("<<< OK %s", json.dumps({
+                        "jobId": job.id,
+                        "caseFile": str(job.case_file),
+                        "prompt": job.prompt,
+                        "mediaAi": public_media_ai(job.media_ai),
+                    }, ensure_ascii=False))
+                    send_json(
+                        self,
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "job": {
+                                "id": job.id,
+                                "caseFile": str(job.case_file),
+                                "mediaAi": public_media_ai(job.media_ai),
+                            },
+                        },
+                    )
+                else:
+                    log_info("<<< DRY-RUN %s", case_path)
+                    send_json(
+                        self,
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "dryRun": True,
+                            "caseFile": str(case_path),
+                            "mediaAi": public_media_ai(load_media_ai_sidecar(case_path)),
+                            "message": "Dry-run: task built but not enqueued",
+                        },
+                    )
+                return
             except Exception as error:
                 log_error("enqueue failed error=%s", error)
                 send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
                 return
-
-            job = jobs[0]
-            log_info("<<< OK %s", json.dumps({
-                "jobId": job.id,
-                "caseFile": str(job.case_file),
-                "prompt": job.prompt,
-                "mediaAi": public_media_ai(job.media_ai),
-            }, ensure_ascii=False))
-            send_json(
-                self,
-                HTTPStatus.OK,
-                {
-                    "ok": True,
-                    "job": {
-                        "id": job.id,
-                        "caseFile": str(job.case_file),
-                        "mediaAi": public_media_ai(job.media_ai),
-                    },
-                },
-            )
-            return
 
         # ---- Single style-image endpoint ----------------------------------------
         style_image_match = re.fullmatch(r"/v1/single/style-image", path)
@@ -1022,6 +1049,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             pose_id = payload.get("poseId")
             force = bool(payload.get("force", False))
             log_info("request modelImageId=%s poseId=%s force=%s", model_image_id, pose_id, force)
+            dry_run = self._is_dry_run()
+            if dry_run:
+                log_info("dry-run: returning job preview without enqueue")
 
             if not model_image_id or not pose_id:
                 log_error("missing required params")
@@ -1056,32 +1086,45 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                jobs = self.server.store.add_jobs([case_path])
+                if not dry_run:
+                    jobs = self.server.store.add_jobs([case_path])
+                    job = jobs[0]
+                    log_info("<<< OK %s", json.dumps({
+                        "jobId": job.id,
+                        "caseFile": str(job.case_file),
+                        "prompt": job.prompt,
+                        "mediaAi": public_media_ai(job.media_ai),
+                    }, ensure_ascii=False))
+                    send_json(
+                        self,
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "job": {
+                                "id": job.id,
+                                "caseFile": str(job.case_file),
+                                "mediaAi": public_media_ai(job.media_ai),
+                            },
+                        },
+                    )
+                else:
+                    log_info("<<< DRY-RUN %s", case_path)
+                    send_json(
+                        self,
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "dryRun": True,
+                            "caseFile": str(case_path),
+                            "mediaAi": public_media_ai(load_media_ai_sidecar(case_path)),
+                            "message": "Dry-run: task built but not enqueued",
+                        },
+                    )
+                return
             except Exception as error:
                 log_error("enqueue failed error=%s", error)
                 send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
                 return
-
-            job = jobs[0]
-            log_info("<<< OK %s", json.dumps({
-                "jobId": job.id,
-                "caseFile": str(job.case_file),
-                "prompt": job.prompt,
-                "mediaAi": public_media_ai(job.media_ai),
-            }, ensure_ascii=False))
-            send_json(
-                self,
-                HTTPStatus.OK,
-                {
-                    "ok": True,
-                    "job": {
-                        "id": job.id,
-                        "caseFile": str(job.case_file),
-                        "mediaAi": public_media_ai(job.media_ai),
-                    },
-                },
-            )
-            return
 
         # ---- Single first-frame-image endpoint -----------------------------------
         first_frame_match = re.fullmatch(r"/v1/single/first-frame-image", path)
@@ -1096,6 +1139,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             scene_id = payload.get("sceneId")
             force = bool(payload.get("force", False))
             log_info("request styleImageId=%s sceneId=%s force=%s", style_image_id, scene_id, force)
+            dry_run = self._is_dry_run()
+            if dry_run:
+                log_info("dry-run: returning job preview without enqueue")
 
             if not style_image_id or not scene_id:
                 log_error("missing required params")
@@ -1130,32 +1176,45 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                jobs = self.server.store.add_jobs([case_path])
+                if not dry_run:
+                    jobs = self.server.store.add_jobs([case_path])
+                    job = jobs[0]
+                    log_info("<<< OK %s", json.dumps({
+                        "jobId": job.id,
+                        "caseFile": str(job.case_file),
+                        "prompt": job.prompt,
+                        "mediaAi": public_media_ai(job.media_ai),
+                    }, ensure_ascii=False))
+                    send_json(
+                        self,
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "job": {
+                                "id": job.id,
+                                "caseFile": str(job.case_file),
+                                "mediaAi": public_media_ai(job.media_ai),
+                            },
+                        },
+                    )
+                else:
+                    log_info("<<< DRY-RUN %s", case_path)
+                    send_json(
+                        self,
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "dryRun": True,
+                            "caseFile": str(case_path),
+                            "mediaAi": public_media_ai(load_media_ai_sidecar(case_path)),
+                            "message": "Dry-run: task built but not enqueued",
+                        },
+                    )
+                return
             except Exception as error:
                 log_error("enqueue failed error=%s", error)
                 send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
                 return
-
-            job = jobs[0]
-            log_info("<<< OK %s", json.dumps({
-                "jobId": job.id,
-                "caseFile": str(job.case_file),
-                "prompt": job.prompt,
-                "mediaAi": public_media_ai(job.media_ai),
-            }, ensure_ascii=False))
-            send_json(
-                self,
-                HTTPStatus.OK,
-                {
-                    "ok": True,
-                    "job": {
-                        "id": job.id,
-                        "caseFile": str(job.case_file),
-                        "mediaAi": public_media_ai(job.media_ai),
-                    },
-                },
-            )
-            return
 
         # ---- Single jimeng-image endpoint ------------------------------------
         jimeng_image_match = re.fullmatch(r"/v1/single/jimeng-image", path)
@@ -1276,9 +1335,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             lines.extend(["", prompt_text, ""])
             case_path.write_text("\n".join(lines), encoding="utf-8")
 
-            # Write .media-ai.json sidecar
+            # Write .media-ai.json sidecar (kebab-case kind)
             sidecar: dict[str, Any] = {
-                "kind": "jimeng_image",
+                "kind": "jimeng-image",
                 "baseUrl": client.base_url,
                 "productId": resolved_product_id,
                 "productName": product_name,
@@ -1300,24 +1359,37 @@ class RequestHandler(BaseHTTPRequestHandler):
                 encoding="utf-8",
             )
 
+            dry_run = self._is_dry_run()
+            if dry_run:
+                log_info("dry-run: returning job preview without enqueue")
+
             try:
-                jobs = self.server.store.add_jobs([case_path])
+                if not dry_run:
+                    jobs = self.server.store.add_jobs([case_path])
+                    job = jobs[0]
+                    log_info("<<< OK jimeng-image job_id=%s", job.id)
+                    send_json(self, HTTPStatus.OK, {
+                        "ok": True,
+                        "job": {
+                            "id": job.id,
+                            "caseFile": str(job.case_file),
+                            "mediaAi": public_media_ai(job.media_ai),
+                        },
+                    })
+                else:
+                    log_info("<<< DRY-RUN %s", case_path)
+                    send_json(self, HTTPStatus.OK, {
+                        "ok": True,
+                        "dryRun": True,
+                        "caseFile": str(case_path),
+                        "mediaAi": public_media_ai(load_media_ai_sidecar(case_path)),
+                        "message": "Dry-run: task built but not enqueued",
+                    })
+                return
             except Exception as error:
                 log_error("enqueue failed: %s", error)
                 send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
                 return
-
-            job = jobs[0]
-            log_info("<<< OK jimeng-image job_id=%s", job.id)
-            send_json(self, HTTPStatus.OK, {
-                "ok": True,
-                "job": {
-                    "id": job.id,
-                    "caseFile": str(job.case_file),
-                    "mediaAi": public_media_ai(job.media_ai),
-                },
-            })
-            return
 
         # ---- Single jimeng-video endpoint ------------------------------------
         jimeng_video_match = re.fullmatch(r"/v1/single/jimeng-video", path)
@@ -1335,6 +1407,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             force = bool(payload.get("force", False))
             prompt_text = payload.get("prompt", "").strip() or None
             log_info("request productId=%s ipId=%s firstFrameId=%s movementId=%s", product_id, ip_id, first_frame_id, movement_id)
+            dry_run = self._is_dry_run()
+            if dry_run:
+                log_info("dry-run: returning job preview without enqueue")
 
             if not product_id:
                 send_json(self, HTTPStatus.BAD_REQUEST, {"error": "productId is required"})
@@ -1383,9 +1458,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             lines.extend(["", prompt_text, ""])
             case_path.write_text("\n".join(lines), encoding="utf-8")
 
-            # Write .media-ai.json sidecar
+            # Write .media-ai.json sidecar (kebab-case kind)
             sidecar: dict[str, Any] = {
-                "kind": "jimeng_video",
+                "kind": "jimeng-video",
                 "baseUrl": client.base_url,
                 "productId": resolved_product_id,
                 "uploadSubDir": "videos",
@@ -1404,23 +1479,32 @@ class RequestHandler(BaseHTTPRequestHandler):
             )
 
             try:
-                jobs = self.server.store.add_jobs([case_path])
+                if not dry_run:
+                    jobs = self.server.store.add_jobs([case_path])
+                    job = jobs[0]
+                    log_info("<<< OK jimeng-video job_id=%s", job.id)
+                    send_json(self, HTTPStatus.OK, {
+                        "ok": True,
+                        "job": {
+                            "id": job.id,
+                            "caseFile": str(job.case_file),
+                            "mediaAi": public_media_ai(job.media_ai),
+                        },
+                    })
+                else:
+                    log_info("<<< DRY-RUN %s", case_path)
+                    send_json(self, HTTPStatus.OK, {
+                        "ok": True,
+                        "dryRun": True,
+                        "caseFile": str(case_path),
+                        "mediaAi": public_media_ai(load_media_ai_sidecar(case_path)),
+                        "message": "Dry-run: task built but not enqueued",
+                    })
+                return
             except Exception as error:
                 log_error("enqueue failed: %s", error)
                 send_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
                 return
-
-            job = jobs[0]
-            log_info("<<< OK jimeng-video job_id=%s", job.id)
-            send_json(self, HTTPStatus.OK, {
-                "ok": True,
-                "job": {
-                    "id": job.id,
-                    "caseFile": str(job.case_file),
-                    "mediaAi": public_media_ai(job.media_ai),
-                },
-            })
-            return
 
         send_json(self, HTTPStatus.NOT_FOUND, {"error": "not_found"})
 

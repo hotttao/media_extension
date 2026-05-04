@@ -243,13 +243,37 @@ class MediaAIClient:
             raise RuntimeError("Login did not produce a NextAuth session cookie.")
         return cookie_str
 
+    def _validate_cookie(self) -> bool:
+        """Validate cached cookie by hitting a lightweight API endpoint."""
+        try:
+            self.request_json("GET", "/api/products?limit=1", cookie=self.cookie)
+            return True
+        except HTTPError as err:
+            if err.code in (401, 403):
+                log_debug("cookie expired (HTTP %d), will re-authenticate", err.code)
+                return False
+            # Other errors — network issue, server error, etc. — treat cookie as potentially valid
+            log_debug("cookie validation got HTTP %d, assuming still valid", err.code)
+            return True
+        except Exception as err:
+            log_debug("cookie validation failed with %s, assuming still valid", err)
+            return True
+
     def resolve_cookie(self, cookie: str | None = None) -> str | None:
-        """Resolve cookie: explicit > env var > .env file > auto-login. Saves to self.cookie."""
+        """Resolve cookie: explicit > env var > .env file > auto-login. Saves to self.cookie.
+
+        If a cached cookie is present (from a previous auto-login), it is validated
+        before reuse. When validation fails (401/403), the cached value is cleared
+        and the full resolution chain is retried.
+        """
         if cookie:
             self.cookie = cookie
             return cookie
         if self.cookie:
-            return self.cookie
+            if self._validate_cookie():
+                return self.cookie
+            # cookie expired — clear and fall through to re-resolve
+            self.cookie = None
         env_cookie = os.environ.get("MEDIA_AI_COOKIE")
         if env_cookie:
             self.cookie = env_cookie.strip()

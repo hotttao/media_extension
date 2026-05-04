@@ -78,10 +78,8 @@ extension/
 ### Jimeng 图片生成自动化 (`jimeng-image.js`)
 
 #### Step 1: 导航
-跳转到 `https://jimeng.jianying.com/`，等待页面加载包含 "jimeng" 的 URL。
+跳转到 `https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0`，等待页面加载包含 "jimeng" 的 URL。
 
-#### Step 2: Tab 选择
-点击"图片生成" tab（`role=tab`，text="图片生成"）。
 
 #### Step 3: 模型与比例/分辨率选择
 - **模型选择器**：`role=combobox` 的 DIV，点击打开 `role=listbox` 下拉，选择"图片5.0 Lite"
@@ -136,7 +134,6 @@ background.js                    content-script.js
 ### 测试步骤（S1-S8）
 popup 提供独立测试按钮，每个步骤单独验证：
 - S1_nav：打开目标页面新 tab
-- S2_tab：点击"图片生成" tab
 - S3_model：选择模型 + 比例/分辨率
 - S4_upload：上传参考图
 - S5_prompt：填写 Prompt

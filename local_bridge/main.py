@@ -80,3 +80,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     uvicorn.run("local_bridge.main:app", host=args.host, port=args.port, reload=False)
+
+
+# Module-level app instance for uvicorn --app-dir reference
+app = create_app()

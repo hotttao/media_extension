@@ -83,14 +83,14 @@ class Test_load_media_ai_sidecar:
         case_path = FIXTURE_ROOT / "cases" / "jimeng_image_case" / "task.md"
         sidecar = load_media_ai_sidecar(case_path)
         assert sidecar is not None
-        assert sidecar["kind"] == "jimeng_image"
+        assert sidecar["kind"] == "jimeng-image"
         assert sidecar["productId"] == "prod_001"
         assert sidecar["ipId"] == "ip_001"
         assert sidecar["productId"] == "prod_001"
         assert sidecar["ipId"] == "ip_001"
 
     def test_missing_sidecar_returns_none(self, tmp_path: pathlib.Path) -> None:
-        # A path with no .media-ai.json alongside
+        # A path with no sidecar file (task.media-ai.json not present)
         task = tmp_path / "task.md"
         task.write_text("hello")
         result = load_media_ai_sidecar(task)
@@ -99,7 +99,7 @@ class Test_load_media_ai_sidecar:
     def test_invalid_json_returns_none(self, tmp_path: pathlib.Path) -> None:
         task = tmp_path / "task.md"
         task.write_text("hello")
-        (tmp_path / ".media-ai.json").write_text("not valid json {", encoding="utf-8")
+        (tmp_path / "task.media-ai.json").write_text("not valid json {", encoding="utf-8")
         result = load_media_ai_sidecar(task)
         assert result is None
 
@@ -107,7 +107,7 @@ class Test_load_media_ai_sidecar:
         case_path = FIXTURE_ROOT / "cases" / "jimeng_video_case" / "task.md"
         sidecar = load_media_ai_sidecar(case_path)
         assert sidecar is not None
-        assert sidecar["kind"] == "jimeng_video"
+        assert sidecar["kind"] == "jimeng-video"
         assert sidecar["firstFrameId"] == "ff_001"
         assert sidecar["movement"] == "缓慢转身展示服装"
 

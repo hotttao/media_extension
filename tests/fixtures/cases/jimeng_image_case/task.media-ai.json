@@ -1,5 +1,5 @@
 {
-  "kind": "jimeng_image",
+  "kind": "jimeng-image",
   "baseUrl": "http://localhost:3000",
   "productId": "prod_001",
   "productName": "Test Product",

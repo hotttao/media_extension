@@ -2,125 +2,27 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
-import time
 from datetime import datetime
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from local_bridge.media_ai_client import MediaAIClient
 from local_bridge.single_task import (
     resolve_media_url,
     extension_from_url,
-    download_file,
     slugify,
+)
+from local_bridge.utils import (
+    request_json,
+    can_reach_bridge,
+    ensure_bridge_running,
+    wait_for_jobs,
+    read_cookie,
+    load_ids,
 )
 
 DEFAULT_BASE_URL = "http://localhost:3000"
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
 DEFAULT_PROMPT_FILE = "prompts/08_即梦文生图"
-
-
-# ---------------------------------------------------------------------------
-# Shared utilities (copied from submit_media_ai_model_images.py for standalone use)
-# ---------------------------------------------------------------------------
-
-def request_json(
-    method: str,
-    url: str,
-    *,
-    body: dict[str, Any] | None = None,
-    timeout: int = 120,
-) -> Any:
-    headers = {"Accept": "application/json"}
-    data = None
-    if body is not None:
-        headers["Content-Type"] = "application/json"
-        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    request = Request(url, data=data, headers=headers, method=method)
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-            return json.loads(raw) if raw else None
-    except HTTPError as error:
-        raw = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"{method} {url} failed with HTTP {error.code}: {raw}") from error
-    except URLError as error:
-        raise RuntimeError(f"{method} {url} failed: {error.reason}") from error
-
-
-def can_reach_bridge(bridge_url: str, timeout: int = 3) -> bool:
-    try:
-        request_json("GET", f"{bridge_url.rstrip('/')}/health", timeout=timeout)
-        return True
-    except Exception:
-        return False
-
-
-def ensure_bridge_running(args: argparse.Namespace) -> None:
-    if can_reach_bridge(args.bridge_url):
-        return
-    import subprocess
-    if args.no_auto_bridge:
-        raise RuntimeError(
-            f"local_bridge is not running at {args.bridge_url}. "
-            "Start it with: python local_bridge/server.py serve"
-        )
-    import pathlib
-    log_dir = pathlib.Path(args.output_root)
-    log_dir.mkdir(exist_ok=True)
-    log_path = log_dir / "auto-local-bridge.log"
-    log_file = log_path.open("a", encoding="utf-8")
-    proc = subprocess.Popen(
-        [sys.executable, "local_bridge/server.py", "serve", "--output-root", "runs"],
-        cwd=pathlib.Path.cwd(),
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
-    )
-    for _ in range(20):
-        if proc.poll() is not None:
-            raise RuntimeError(f"Failed to start local bridge. See {log_path}.")
-        if can_reach_bridge(args.bridge_url):
-            print(f"[BRIDGE] started local queue bridge at {args.bridge_url}. Log: {log_path}")
-            return
-        time.sleep(0.5)
-    raise RuntimeError(f"Timed out waiting for local bridge to start. See {log_path}.")
-
-
-def wait_for_jobs(
-    bridge_url: str,
-    job_ids: set[str],
-    *,
-    poll_interval: int,
-    timeout_seconds: int,
-) -> bool:
-    started = time.time()
-    last_status_line = ""
-    while True:
-        payload = request_json("GET", f"{bridge_url.rstrip('/')}/v1/state", timeout=120)
-        jobs = payload.get("jobs", []) if isinstance(payload, dict) else []
-        tracked = [job for job in jobs if str(job.get("id")) in job_ids]
-        counts: dict[str, int] = {}
-        for job in tracked:
-            status = str(job.get("status") or "unknown")
-            counts[status] = counts.get(status, 0) + 1
-        status_line = ", ".join(f"{key}={counts[key]}" for key in sorted(counts)) or "no tracked jobs"
-        if status_line != last_status_line:
-            print(f"[WAIT] {status_line}")
-            last_status_line = status_line
-        terminal_count = sum(1 for job in tracked if job.get("status") in {"completed", "failed"})
-        if len(tracked) == len(job_ids) and terminal_count == len(job_ids):
-            failed = [job for job in tracked if job.get("status") == "failed"]
-            if failed:
-                print(f"[DONE] {len(failed)} job(s) failed.")
-                return False
-            print("[DONE] all jobs completed.")
-            return True
-        if timeout_seconds > 0 and time.time() - started > timeout_seconds:
-            print("[TIMEOUT] waiting for jobs timed out.", file=sys.stderr)
-            return False
-        time.sleep(max(1, poll_interval))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -144,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--output-root", default=f"runs/media-ai-jimeng-image-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
     parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="Print job preview without enqueueing or downloading assets.")
     parser.add_argument("--no-auto-bridge", action="store_true")
     parser.add_argument("--no-wait", action="store_true")
     parser.add_argument("--poll-interval", type=int, default=15)
@@ -151,35 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def load_ids(path: str) -> list[str]:
-    import pathlib
-    text = pathlib.Path(path).read_text(encoding="utf-8").strip()
-    if not text:
-        return []
-    if text.startswith("["):
-        payload = json.loads(text)
-        if not isinstance(payload, list):
-            raise ValueError(f"{path} must contain a JSON array or one id per line.")
-        return [str(item).strip() for item in payload if str(item).strip()]
-    ids: list[str] = []
-    for line in text.splitlines():
-        value = line.split("#", 1)[0].strip()
-        if value:
-            ids.append(value)
-    return ids
-
-
 def main() -> int:
     args = build_parser().parse_args()
     import pathlib
 
-    # Resolve cookie
-    cookie = args.cookie
-    if not cookie and args.cookie_file:
-        cookie = pathlib.Path(args.cookie_file).read_text(encoding="utf-8").strip()
-    if not cookie:
-        import os
-        cookie = os.environ.get("MEDIA_AI_COOKIE")
+    # Resolve cookie — delegates to utils.read_cookie which handles all sources
+    cookie = read_cookie(args)
 
     base_url = args.base_url.rstrip("/")
     prompt = pathlib.Path(args.prompt_file).read_text(encoding="utf-8").strip()
@@ -187,6 +67,7 @@ def main() -> int:
     output_root.mkdir(parents=True, exist_ok=True)
 
     client = MediaAIClient(base_url=base_url, cookie=cookie, timeout=args.timeout)
+    client.resolve_cookie()  # auto-login via .env if needed
 
     # Resolve style image IDs
     style_image_ids: list[str] = list(args.style_image_id or [])
@@ -359,9 +240,9 @@ def main() -> int:
                 case_path = task_dir / "task.md"
                 case_path.write_text("\n".join(lines), encoding="utf-8")
 
-                # Write .media-ai.json sidecar
+                # Write .media-ai.json sidecar (kebab-case kind)
                 sidecar: dict[str, Any] = {
-                    "kind": "jimeng_image",
+                    "kind": "jimeng-image",
                     "baseUrl": base_url,
                     "productId": product_id,
                     "productName": product_name,
@@ -404,6 +285,11 @@ def main() -> int:
         return 0
     if args.prepare_only:
         print(f"Prepared {len(task_paths)} task(s).")
+        return 0
+    if args.dry_run:
+        print(f"[DRY-RUN] Would enqueue {len(task_paths)} task(s):")
+        for path in task_paths:
+            print(f"  - {path}")
         return 0
 
     ensure_bridge_running(args)
