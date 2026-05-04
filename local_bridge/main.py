@@ -19,6 +19,7 @@ from local_bridge.api.routers import (
     job_cancel_router,
     jobs_cancel_router,
     job_delete_router,
+    assets_router,
     single_model_image_router,
     single_style_image_router,
     single_first_frame_router,
@@ -71,6 +72,7 @@ def create_app(store: JobStore | None = None) -> FastAPI:
     app.include_router(job_cancel_router, prefix="/v1", tags=["job"])
     app.include_router(jobs_cancel_router, prefix="/v1", tags=["jobs"])
     app.include_router(job_delete_router, prefix="/v1", tags=["job"])
+    app.include_router(assets_router, prefix="/v1", tags=["assets"])
     app.include_router(single_model_image_router, prefix="/v1", tags=["single"])
     app.include_router(single_style_image_router, prefix="/v1", tags=["single"])
     app.include_router(single_first_frame_router, prefix="/v1", tags=["single"])

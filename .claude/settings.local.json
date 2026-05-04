@@ -128,7 +128,9 @@
       "Bash(tasklist /FI 'PID eq 41396')",
       "Bash(wmic process:*)",
       "Bash(PYTHONPATH=. uv run python -c \":*)",
-      "Bash(PYTHONPATH=. uv run python scripts/generate_docs.py)"
+      "Bash(PYTHONPATH=. uv run python scripts/generate_docs.py)",
+      "Bash(uv run python -c \":*)",
+      "Bash(xargs cat:*)"
     ]
   }
 }
