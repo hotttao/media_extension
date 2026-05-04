@@ -58,7 +58,7 @@ def request_json(
 
 def can_reach_bridge(bridge_url: str, timeout: int = 3) -> bool:
     try:
-        request_json("GET", f"{bridge_url.rstrip('/')}/health", timeout=timeout)
+        request_json("GET", f"{bridge_url.rstrip('/')}/v1/state", timeout=timeout)
         return True
     except Exception:
         return False

@@ -129,7 +129,8 @@ task 保存在 media_ai_task 表中。表中需要包含如下字段:
 - product_id: 95256aaf-48c5-46a7-a4fd-990d756c9ed0
 - pose_id: 4df51547-928f-44b6-ad5a-0f7807c0106c
 - scene_id: 3d30e5eb-292d-4574-95f6-abb25e00fc6c
-
+- style_image_id: f07aff65-ba21-4e2c-9580-d599417318f8
+- movement_id: 0b8925cf-c3db-4488-9623-261a20b2ffd8
 
 执行流程:
 1. 模特图生成: ip_id, product_id -> 生成模特图
@@ -141,3 +142,10 @@ task 保存在 media_ai_task 表中。表中需要包含如下字段:
 - team_id: 981cd79c-5973-429a-8edf-dff3eda45014
 
 生成一个 api 接口，一个clie 接口，和一个使用上述参数指定的测试文件。
+
+
+## 测试
+
+```
+uv run -m  scripts.submit_jimeng_image     --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8    --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c     --dry-run
+```

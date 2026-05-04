@@ -104,7 +104,21 @@
       "Bash(uv sync:*)",
       "Bash(pkill -f \"uvicorn\")",
       "Bash(PYTHONPATH=. uv run python scripts/submit_jimeng_image.py --style-image-id test-123 --scene-id scene-456 --dry-run)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(PYTHONPATH=. uv run python scripts/submit_jimeng_image.py --style-image-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --ip-id 981cd79c-5973-429a-8edf-dff3eda45014 --product-id 95256aaf-48c5-46a7-a4fd-990d756c9ed0 --dry-run)",
+      "Bash(PYTHONPATH=. uv run python scripts/submit_jimeng_image.py --style-image-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --dry-run)",
+      "Bash(PYTHONPATH=. uv run python scripts/submit_media_ai_style_images.py --help)",
+      "Bash(PYTHONPATH=. uv run python scripts/submit_jimeng_image.py --style-image-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --no-auto-bridge --dry-run)",
+      "Bash(PYTHONPATH=. uv run python scripts/submit_jimeng_image.py --style-image-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --bridge-url http://localhost:8765 --dry-run)",
+      "Bash(PYTHONPATH=. uv run python scripts/submit_jimeng_image.py --style-image-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --bridge-url http://localhost:8765 --no-auto-bridge --dry-run)",
+      "mcp__context7__query-docs",
+      "Bash(DEBUG=1 PYTHONPATH=. uv run python scripts/submit_jimeng_image.py --style-image-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --no-auto-bridge --dry-run)",
+      "Bash(LOG_LEVEL=DEBUG PYTHONPATH=. uv run python scripts/submit_jimeng_image.py --style-image-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --no-auto-bridge --dry-run)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_media_ai_client.py -v --tb=short)",
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_jimeng_image --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8 --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --dry-run)",
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_jimeng_image --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8 --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --no-auto-bridge)",
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_jimeng_image --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8 --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c)",
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_jimeng_image --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8 --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --no-wait)"
     ]
   }
 }

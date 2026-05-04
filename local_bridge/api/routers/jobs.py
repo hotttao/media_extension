@@ -24,7 +24,7 @@ def create_jobs(body: JobsCreateRequest, request: Request):
     from pathlib import Path
     from local_bridge.domain.models import build_jobs
 
-    store: JobStore = request.app.state.store
+    store: JobStore | None = getattr(request.app.state, "store", None)
     raw_paths = body.caseFiles or body.tasks or []
     if not isinstance(raw_paths, list):
         raise HTTPException(status_code=400, detail="caseFiles must be an array")
@@ -36,6 +36,14 @@ def create_jobs(body: JobsCreateRequest, request: Request):
                 raise HTTPException(status_code=400, detail=f"File not found: {p}")
             if p.suffix.lower() != ".md":
                 raise HTTPException(status_code=400, detail=f"Only Markdown task files are supported: {p}")
+
+        if store is None:
+            output_root = Path("runs")
+            output_root.mkdir(parents=True, exist_ok=True)
+            existing_jobs = build_jobs(case_paths, output_root.resolve())
+            store = JobStore(jobs=existing_jobs, output_root=output_root.resolve())
+            request.app.state.store = store
+
         jobs = store.add_jobs(case_paths)
     except HTTPException:
         raise
