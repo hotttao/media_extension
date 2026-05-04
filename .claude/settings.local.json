@@ -126,7 +126,9 @@
       "Bash(PYTHONPATH=. uv run python -m scripts.submit_media_ai_model_images --product-id 3756942865549361640 --ip-id 981cd79c-5973-429a-8edf-dff3eda45014 --no-wait)",
       "Bash(tasklist)",
       "Bash(tasklist /FI 'PID eq 41396')",
-      "Bash(wmic process:*)"
+      "Bash(wmic process:*)",
+      "Bash(PYTHONPATH=. uv run python -c \":*)",
+      "Bash(PYTHONPATH=. uv run python scripts/generate_docs.py)"
     ]
   }
 }

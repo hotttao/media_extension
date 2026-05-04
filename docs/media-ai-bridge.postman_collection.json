@@ -1,0 +1,662 @@
+{
+  "info": {
+    "name": "local_bridge",
+    "version": "1.0.0",
+    "description": "Media AI task queue bridge with OpenAPI docs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8765",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Get State",
+      "request": {
+        "name": "Get State",
+        "request": {
+          "method": "GET",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/state",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "state"
+            ]
+          },
+          "description": ""
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Create Jobs",
+      "request": {
+        "name": "Create Jobs",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/jobs",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "jobs"
+            ]
+          },
+          "description": "",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Claim Job",
+      "request": {
+        "name": "Claim Job",
+        "request": {
+          "method": "GET",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/job/claim",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "job",
+              "claim"
+            ]
+          },
+          "description": ""
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Update Progress",
+      "request": {
+        "name": "Update Progress",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/job/{{job_id}}/progress",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "job",
+              "{{job_id}}",
+              "progress"
+            ],
+            "variable": [
+              {
+                "key": "job_id",
+                "type": "string"
+              }
+            ]
+          },
+          "description": "",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Submit Result",
+      "request": {
+        "name": "Submit Result",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/job/{{job_id}}/result",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "job",
+              "{{job_id}}",
+              "result"
+            ],
+            "variable": [
+              {
+                "key": "job_id",
+                "type": "string"
+              }
+            ]
+          },
+          "description": "",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Fail Job",
+      "request": {
+        "name": "Fail Job",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/job/{{job_id}}/fail",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "job",
+              "{{job_id}}",
+              "fail"
+            ],
+            "variable": [
+              {
+                "key": "job_id",
+                "type": "string"
+              }
+            ]
+          },
+          "description": "",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Requeue Job",
+      "request": {
+        "name": "Requeue Job",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/job/{{job_id}}/requeue",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "job",
+              "{{job_id}}",
+              "requeue"
+            ],
+            "variable": [
+              {
+                "key": "job_id",
+                "type": "string"
+              }
+            ]
+          },
+          "description": ""
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Cancel Job",
+      "request": {
+        "name": "Cancel Job",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/job/{{job_id}}/cancel",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "job",
+              "{{job_id}}",
+              "cancel"
+            ],
+            "variable": [
+              {
+                "key": "job_id",
+                "type": "string"
+              }
+            ]
+          },
+          "description": ""
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Cancel All Jobs",
+      "request": {
+        "name": "Cancel All Jobs",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/jobs/cancel",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "jobs",
+              "cancel"
+            ]
+          },
+          "description": ""
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Job",
+      "request": {
+        "name": "Delete Job",
+        "request": {
+          "method": "DELETE",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/job/{{job_id}}",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "job",
+              "{{job_id}}"
+            ],
+            "variable": [
+              {
+                "key": "job_id",
+                "type": "string"
+              }
+            ]
+          },
+          "description": ""
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Create Model Image",
+      "request": {
+        "name": "Create Model Image",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/single/model-image",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "single",
+              "model-image"
+            ]
+          },
+          "description": "",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Create Style Image",
+      "request": {
+        "name": "Create Style Image",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/single/style-image",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "single",
+              "style-image"
+            ]
+          },
+          "description": "",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Create First Frame Image",
+      "request": {
+        "name": "Create First Frame Image",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/single/first-frame-image",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "single",
+              "first-frame-image"
+            ]
+          },
+          "description": "",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Create Jimeng Image",
+      "request": {
+        "name": "Create Jimeng Image",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/single/jimeng-image",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "single",
+              "jimeng-image"
+            ]
+          },
+          "description": "",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Create Jimeng Video",
+      "request": {
+        "name": "Create Jimeng Video",
+        "request": {
+          "method": "POST",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/single/jimeng-video",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "single",
+              "jimeng-video"
+            ]
+          },
+          "description": "",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": []
+      },
+      "response": []
+    }
+  ]
+}
