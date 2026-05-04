@@ -10,6 +10,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from loguru import logger
+
 from local_bridge.domain.models import ensure_text, sha256_bytes
 
 
@@ -106,12 +108,14 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
     if not product_id:
         raise RuntimeError("Media AI sidecar requires productId.")
 
-    upload_result = upload_file_multipart(
-        f"{base_url}/api/upload", cookie=cookie, file_path=output_path, sub_dir=sub_dir
-    )
+    upload_url = f"{base_url}/api/upload"
+    logger.info("[upload] POST {url} sub_dir={sub_dir} file={file}", url=upload_url, sub_dir=sub_dir, file=output_path.name)
+    upload_result = upload_file_multipart(upload_url, cookie=cookie, file_path=output_path, sub_dir=sub_dir)
     image_url = ensure_text(upload_result.get("url") or "")
     if not image_url:
+        logger.error("[upload] response missing url: {result}", result=upload_result)
         raise RuntimeError(f"Media AI upload response did not include url: {upload_result}")
+    logger.info("[upload] OK url={url}", url=image_url)
 
     if kind == "style-image":
         model_image_id = ensure_text(job.media_ai.get("modelImageId") or "")
@@ -134,13 +138,14 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
             "sceneId": job.media_ai.get("sceneId"),
             "composition": job.media_ai.get("composition"),
             "imageUrl": image_url,
+            "generationPath": "gpt",
         }
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     elif kind in ("jimeng_image",):
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
         if not ip_id:
             raise RuntimeError("jimeng_image sidecar requires ipId.")
-        save_body = {"ipId": ip_id, "imageUrl": image_url}
+        save_body = {"ipId": ip_id, "imageUrl": image_url, "generationPath": "gpt"}
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     else:
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
@@ -149,7 +154,9 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
         save_body = {"ipId": ip_id, "imageUrl": image_url}
         save_url = f"{base_url}/api/products/{product_id}/model-image/save"
 
+    logger.info("[save] POST {url} body={body}", url=save_url, body=save_body)
     save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
+    logger.info("[save] OK result={result}", result=save_result)
     return {"kind": kind, "uploaded": upload_result, "saved": save_result}
 
 
