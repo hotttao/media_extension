@@ -1,14 +1,14 @@
-# GET /api/tools/combination/style-images
+# DELETE /api/video-push/{id}
 
-**Resource:** [tools](../resources/tools.md)
-**GET tools combination style images**
-**Operation ID:** `getToolsCombinationStyleImages`
+**Resource:** [video-push](../resources/video-push.md)
+**DELETE video push id**
+**Operation ID:** `deleteVideoPushId`
 
 ## Parameters
 
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
-| `productId` | query | string | No |  |
+| `id` | path | string | Yes |  |
 
 ## Responses
 
@@ -17,6 +17,7 @@
 | 200 | Success |
 | 400 | Error |
 | 401 | Error |
+| 404 | Error |
 | 500 | Error |
 
 **Success Response Schema:**

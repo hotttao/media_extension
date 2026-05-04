@@ -92,8 +92,10 @@ def create_jimeng_image(body: JimengImageCreateRequest, request: Request):
         client.download_file(main_media_url, main_path, cookie=cookie)
         if scene_media_url:
             client.download_file(scene_media_url, scene_path, cookie=cookie)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"download failed: {e}")
+    except Exception:
+        from local_bridge.server import logger
+        logger.exception("jimeng-image download failed")
+        raise HTTPException(status_code=500, detail="download failed")
 
     if body.prompt:
         prompt_text = body.prompt

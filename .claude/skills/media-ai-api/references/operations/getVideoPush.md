@@ -1,21 +1,22 @@
-# GET /api/tools/combination/style-images
+# GET /api/video-push
 
-**Resource:** [tools](../resources/tools.md)
-**GET tools combination style images**
-**Operation ID:** `getToolsCombinationStyleImages`
+**Resource:** [video-push](../resources/video-push.md)
+**GET video push**
+**Operation ID:** `getVideoPush`
 
 ## Parameters
 
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
 | `productId` | query | string | No |  |
+| `ipId` | query | string | No |  |
+| `qualified` | query | string | No |  |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
 | 200 | Success |
-| 400 | Error |
 | 401 | Error |
 | 500 | Error |
 

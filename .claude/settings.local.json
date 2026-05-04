@@ -130,7 +130,29 @@
       "Bash(PYTHONPATH=. uv run python -c \":*)",
       "Bash(PYTHONPATH=. uv run python scripts/generate_docs.py)",
       "Bash(uv run python -c \":*)",
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "Bash(md5 D:Codemediagpt_image2extensioncontent-handlersgpt.js)",
+      "Bash(certutil -hashfile D:Codemediagpt_image2extensioncontent-handlersgpt.js MD5)",
+      "Bash(md5)",
+      "Bash(certutil -hashfile stdin MD5)",
+      "Bash(for fn:*)",
+      "Bash(do grep:*)",
+      "Bash(echo \"OK: $fn\")",
+      "Bash(echo \"MISSING: $fn\")",
+      "Bash(echo \"MISSING: $fn\\\\n\")",
+      "Bash(PYTHONPATH=. uv run python scripts/submit_media_ai_first_frame_images.py --help)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_business_logic.py -v -k \"model_image or first_frame_image\")",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_business_logic.py -v)",
+      "Bash(curl -s -X POST \"http://localhost:3456/eval?target=919BA1C78885D1D558476E27DE32F846\" -d \":*)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_business_logic.py -q)",
+      "Bash(curl -s -X POST \"http://localhost:3456/eval?target=919BA1C78885D1D558476E27DE32F846\" -d \"document.body.click\\(\\)\")",
+      "Bash(curl -s -X POST \"http://localhost:3456/eval?target=919BA1C78885D1D558476E27DE32F846\" -d \"document.querySelectorAll\\(''[role=combobox]''\\)[1].click\\(\\)\")",
+      "Bash(curl -s -X POST \"http://localhost:3456/eval?target=289C3A498EA475A1096A0D56A0067DAB\" -d \":*)",
+      "WebFetch(domain:developer.aliyun.com)",
+      "WebSearch",
+      "WebFetch(domain:zhuanlan.zhihu.com)",
+      "Bash(python3 -c \"import sys,json; [print\\(t[''''targetId''''], t[''''title'''']\\) for t in json.load\\(sys.stdin\\) if ''''jimeng'''' in t[''''url'''']]\")",
+      "Bash(identify ./ratio_debug.png)"
     ]
   }
 }

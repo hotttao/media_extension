@@ -1,22 +1,23 @@
-# GET /api/tools/combination/style-images
+# DELETE /api/daily-publish-plan/plans/{id}
 
-**Resource:** [tools](../resources/tools.md)
-**GET tools combination style images**
-**Operation ID:** `getToolsCombinationStyleImages`
+**Resource:** [daily-publish-plan](../resources/daily-publish-plan.md)
+**DELETE daily publish plan plans id**
+**Operation ID:** `deleteDailyPublishPlanPlansId`
 
 ## Parameters
 
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
-| `productId` | query | string | No |  |
+| `id` | path | string | Yes |  |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
 | 200 | Success |
-| 400 | Error |
 | 401 | Error |
+| 403 | Error |
+| 404 | Error |
 | 500 | Error |
 
 **Success Response Schema:**

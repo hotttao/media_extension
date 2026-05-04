@@ -5,16 +5,15 @@ from local_bridge.api.schemas import (
     SingleJobCreatedResponse,
 )
 from local_bridge.infrastructure.media_ai_client import MediaAIClient
+from loguru import logger
 
 router = APIRouter(tags=["single"])
-
-MEDIA_AI_BASE_URL = "http://localhost:3000"
 
 
 @router.post("/single/model-image", response_model=SingleJobCreatedResponse, responses={400: {"model": dict}, 404: {"model": dict}})
 def create_model_image(body: ModelImageCreateRequest, request: Request):
     from pathlib import Path
-    from local_bridge.domain.models import load_media_ai_sidecar, build_jobs, public_media_ai
+    from local_bridge.domain.models import load_media_ai_sidecar, public_media_ai
 
     client: MediaAIClient = request.app.state.media_ai_client
     cookie_header = request.headers.get("Cookie")
@@ -48,13 +47,15 @@ def create_model_image(body: ModelImageCreateRequest, request: Request):
             prompt=prompt,
             force=force,
         )
-    except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
+    except Exception:
+        logger.exception("[model-image] exception")
+        raise HTTPException(status_code=500, detail="internal error")
 
     if status == "exists":
         raise HTTPException(status_code=409, detail="model image already exists for this product/IP pair")
     if case_path is None:
-        raise HTTPException(status_code=500, detail="task build failed")
+        logger.error("[model-image] build failed status={status}", status=status)
+        raise HTTPException(status_code=500, detail=f"task build failed: {status}")
 
     dry_run = "dry-run" in request.query_params or "dry_run" in request.query_params
     if dry_run:

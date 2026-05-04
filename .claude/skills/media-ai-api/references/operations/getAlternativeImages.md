@@ -1,14 +1,15 @@
-# GET /api/tools/combination/style-images
+# GET /api/alternative-images
 
-**Resource:** [tools](../resources/tools.md)
-**GET tools combination style images**
-**Operation ID:** `getToolsCombinationStyleImages`
+**Resource:** [alternative-images](../resources/alternative-images.md)
+**GET alternative images**
+**Operation ID:** `getAlternativeImages`
 
 ## Parameters
 
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
-| `productId` | query | string | No |  |
+| `materialType` | query | string | No |  |
+| `relatedId` | query | string | No |  |
 
 ## Responses
 
@@ -17,6 +18,7 @@
 | 200 | Success |
 | 400 | Error |
 | 401 | Error |
+| 404 | Error |
 | 500 | Error |
 
 **Success Response Schema:**

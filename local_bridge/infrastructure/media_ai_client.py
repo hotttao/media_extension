@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import mimetypes
 import os
 import pathlib
@@ -16,33 +15,23 @@ from typing import Any
 from urllib.parse import quote, urlencode, urljoin, urlparse, urlunparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 from urllib.error import HTTPError, URLError
+from loguru import logger as _logger
 
-
-# ---------------------------------------------------------------------------
-# Structured Logging
-# ---------------------------------------------------------------------------
-
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG").upper()
-_LOG_DIR = pathlib.Path("logs")
-_LOG_DIR.mkdir(exist_ok=True)
-_logger = logging.getLogger("media_ai_client")
-_logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
-_logger.handlers.clear()
-_fh = logging.FileHandler(_LOG_DIR / "media_ai_client.log", encoding="utf-8")
-_fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
-_logger.addHandler(_fh)
-
-
-def log_debug(msg: str, *args: Any, **kwargs: Any) -> None:
-    _logger.debug(msg, *args, extra=kwargs)
-
-
-def log_info(msg: str, *args: Any, **kwargs: Any) -> None:
-    _logger.info(msg, *args, extra=kwargs)
-
-
-def log_error(msg: str, *args: Any, **kwargs: Any) -> None:
-    _logger.error(msg, *args, extra=kwargs)
+# Configure loguru for this module
+_logger.remove()
+LOG_FILE = pathlib.Path("logs/media_ai_client.log")
+LOG_FILE.parent.mkdir(exist_ok=True)
+_logger.add(
+    LOG_FILE,
+    format="{time:HH:mm:ss} | {level} | {message}",
+    level=os.environ.get("LOG_LEVEL", "DEBUG").upper(),
+    rotation="100 MB",
+    retention="7 days",
+    encoding="utf-8",
+    enqueue=True,
+    backtrace=True,
+    diagnose=True,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -250,13 +239,13 @@ class MediaAIClient:
             return True
         except HTTPError as err:
             if err.code in (401, 403):
-                log_debug("cookie expired (HTTP %d), will re-authenticate", err.code)
+                _logger.debug("cookie expired (HTTP {code}), will re-authenticate", code=err.code)
                 return False
             # Other errors — network issue, server error, etc. — treat cookie as potentially valid
-            log_debug("cookie validation got HTTP %d, assuming still valid", err.code)
+            _logger.debug("cookie validation got HTTP {code}, assuming still valid", code=err.code)
             return True
         except Exception as err:
-            log_debug("cookie validation failed with %s, assuming still valid", err)
+            _logger.debug("cookie validation failed with {err}, assuming still valid", err=err)
             return True
 
     def resolve_cookie(self, cookie: str | None = None) -> str | None:
@@ -280,7 +269,7 @@ class MediaAIClient:
             return self.cookie
 
         # Try .env file (project root: two levels up from this file)
-        env_file = pathlib.Path(__file__).resolve().parent.parent / ".env"
+        env_file = pathlib.Path.cwd() / ".env"
         env_values: dict[str, str] = {}
         if env_file.exists():
             for raw_line in env_file.read_text(encoding="utf-8").splitlines():
@@ -324,19 +313,19 @@ class MediaAIClient:
             headers["Cookie"] = resolved_cookie
 
         url = f"{self.base_url}{path}" if path.startswith("/") else f"{self.base_url}/{path}"
-        log_debug("HTTP %s %s", method, path)
+        _logger.debug("HTTP {method} {path}", method=method, path=path)
         request = Request(_quote_url(url), data=data, headers=headers, method=method)
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8")
-                log_debug("HTTP %s %s -> %d (%d bytes)", method, path, response.status, len(raw) if raw else 0)
+                _logger.debug("HTTP {method} {path} -> {status} ({size} bytes)", method=method, path=path, status=response.status, size=len(raw) if raw else 0)
                 return json.loads(raw) if raw else None
         except HTTPError as error:
             raw = error.read().decode("utf-8", errors="replace")
-            log_error("HTTP %s %s -> HTTP %d (%d bytes)", method, path, error.code, len(raw) if raw else 0)
+            _logger.error("HTTP {method} {path} -> HTTP {code} ({size} bytes)", method=method, path=path, code=error.code, size=len(raw) if raw else 0)
             raise RuntimeError(f"{method} {url} failed with HTTP {error.code}: {raw}") from error
         except URLError as error:
-            log_error("HTTP %s %s -> ERR %s", method, path, error.reason)
+            _logger.error("HTTP {method} {path} -> ERR {reason}", method=method, path=path, reason=error.reason)
             raise RuntimeError(f"{method} {url} failed: {error.reason}") from error
 
     def download_file(
@@ -347,7 +336,7 @@ class MediaAIClient:
         cookie: str | None = None,
     ) -> None:
         """Download a URL to a local file. Handles Chinese characters in URL paths."""
-        log_debug("download_file url=%s target=%s", url, target.name)
+        _logger.debug("download_file url={url} target={target}", url=url, target=target.name)
         headers = {"Accept": "*/*"}
         resolved_cookie = cookie or self.cookie
         if resolved_cookie:
@@ -357,12 +346,12 @@ class MediaAIClient:
             with urlopen(request, timeout=self.timeout) as response:
                 data = response.read()
                 target.write_bytes(data)
-                log_debug("download_file completed url=%s size=%d bytes", url, len(data))
+                _logger.debug("download_file completed url={url} size={size} bytes", url=url, size=len(data))
         except HTTPError as error:
-            log_error("download_file failed url=%s HTTP=%d", url, error.code)
+            _logger.error("download_file failed url={url} HTTP={code}", url=url, code=error.code)
             raise
         except URLError as error:
-            log_error("download_file failed url=%s err=%s", url, error.reason)
+            _logger.error("download_file failed url={url} err={reason}", url=url, reason=error.reason)
             raise
 
     def upload_file(
@@ -373,7 +362,7 @@ class MediaAIClient:
         cookie: str | None = None,
     ) -> dict:
         """Upload a file to Media AI via multipart form."""
-        log_debug("upload_file file=%s sub_dir=%s", file_path.name, sub_dir)
+        _logger.debug("upload_file file={file} sub_dir={sub}", file=file_path.name, sub=sub_dir)
         boundary = f"----codex-{uuid.uuid4().hex}"
         file_bytes = file_path.read_bytes()
         mime_type = guess_mime_type(file_path)
@@ -406,14 +395,14 @@ class MediaAIClient:
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8")
-                log_debug("upload_file completed file=%s size=%d bytes", file_path.name, len(file_bytes))
+                _logger.debug("upload_file completed file={file} size={size} bytes", file=file_path.name, size=len(file_bytes))
                 return json.loads(raw) if raw else {}
         except HTTPError as error:
             raw = error.read().decode("utf-8", errors="replace")
-            log_error("upload_file failed file=%s HTTP=%d", file_path.name, error.code)
+            _logger.error("upload_file failed file={file} HTTP={code}", file=file_path.name, code=error.code)
             raise RuntimeError(f"POST {url} failed with HTTP {error.code}: {raw}") from error
         except URLError as error:
-            log_error("upload_file failed file=%s err=%s", file_path.name, error.reason)
+            _logger.error("upload_file failed file={file} err={reason}", file=file_path.name, reason=error.reason)
             raise RuntimeError(f"POST {url} failed: {error.reason}") from error
 
     # -------------------------------------------------------------------------
@@ -602,11 +591,11 @@ class MediaAIClient:
 
         images = product.get("images") or []
         if not isinstance(images, list) or not images:
-            return (None, "error")
+            raise RuntimeError(f"[model-image] product {product_id} has no images")
 
         image_items = [item for item in images if isinstance(item, dict) and item.get("url")]
         if not image_items:
-            return (None, "error")
+            raise RuntimeError(f"[model-image] product {product_id} has no valid image URLs")
 
         main = next((item for item in image_items if item.get("isMain") is True), None)
         if main is None:
@@ -617,7 +606,7 @@ class MediaAIClient:
         main_image_url = resolve_media_url(self.media_base_url, str(main["url"]))
         ip_full_body_url = ip.get("fullBodyUrl")
         if not product_id or not ip_id or not main_image_url or not ip_full_body_url:
-            return (None, "error")
+            raise RuntimeError(f"[model-image] missing required fields product_id={product_id!r} ip_id={ip_id!r} main_url={main_image_url!r} ip_full_body={ip_full_body_url!r}")
 
         task_dir = output_root / f"{slugify(product_name)}-{product_id[:8]}__{slugify(ip_name)}-{ip_id[:8]}"
         assets_dir = task_dir / "assets"
@@ -628,7 +617,7 @@ class MediaAIClient:
 
         ip_path = assets_dir / f"model-reference{extension_from_url(ip_url)}"
         main_path = assets_dir / f"product-main{extension_from_url(main_url)}"
-        log_debug("build_model_image_task downloading assets ip_url=%s main_url=%s", ip_url, main_url)
+        _logger.debug("build_model_image_task downloading assets ip_url={ip} main_url={main}", ip=ip_url, main=main_url)
         self.download_file(ip_url, ip_path, cookie=cookie)
         self.download_file(main_url, main_path, cookie=cookie)
 
@@ -674,10 +663,10 @@ class MediaAIClient:
 
         model_image = self.fetch_model_image(model_image_id)
         if not model_image:
-            return (None, "error")
+            raise RuntimeError(f"[style-image] model_image not found: {model_image_id}")
         pose = self.fetch_pose(pose_id)
         if not pose:
-            return (None, "error")
+            raise RuntimeError(f"[style-image] pose not found: {pose_id}")
 
         model_image_id_str = str(model_image.get("id") or "")
         product_id = str(model_image.get("productId") or "")
@@ -688,7 +677,7 @@ class MediaAIClient:
         model_url = str(model_image.get("url") or "")
         pose_url = str(pose.get("url") or "")
         if not model_image_id_str or not product_id or not pose_id_str or not model_url or not pose_url:
-            return (None, "error")
+            raise RuntimeError(f"[style-image] missing fields: model_id={model_image_id_str!r} product_id={product_id!r} pose_id={pose_id_str!r} model_url={model_url!r} pose_url={pose_url!r}")
 
         if not force:
             existing = self.existing_style_images(model_image_id_str, pose_id_str)
@@ -706,7 +695,7 @@ class MediaAIClient:
         pose_media_url = resolve_media_url(self.media_base_url, pose_url)
         model_path = assets_dir / f"model-image{extension_from_url(model_media_url)}"
         pose_path = assets_dir / f"pose-reference{extension_from_url(pose_media_url)}"
-        log_debug("build_style_image_task downloading assets model_url=%s pose_url=%s", model_media_url, pose_media_url)
+        _logger.debug("build_style_image_task downloading assets model_url={model} pose_url={pose}", model=model_media_url, pose=pose_media_url)
         self.download_file(model_media_url, model_path, cookie=cookie)
         self.download_file(pose_media_url, pose_path, cookie=cookie)
 
@@ -755,10 +744,10 @@ class MediaAIClient:
 
         style_image = self.fetch_style_image(style_image_id)
         if not style_image:
-            return (None, "error")
+            raise RuntimeError(f"[first-frame] style_image not found: {style_image_id}")
         scene = self.fetch_scene(scene_id)
         if not scene:
-            return (None, "error")
+            raise RuntimeError(f"[first-frame] scene not found: {scene_id}")
 
         product_id = str(style_image.get("productId") or "")
         product_name = str(style_image.get("productName") or product_id)
@@ -770,7 +759,7 @@ class MediaAIClient:
         scene_url_val = _scene_url(scene)
 
         if not product_id or not ip_id or not style_image_id_str or not style_image_url or not scene_id_key or not scene_url_val:
-            return (None, "error")
+            raise RuntimeError(f"[first-frame] missing fields: product_id={product_id!r} ip_id={ip_id!r} style_image_id={style_image_id_str!r} style_url={style_image_url!r} scene_id={scene_id_key!r} scene_url={scene_url_val!r}")
 
         if not force:
             existing = self.existing_first_frames(product_id, style_image_id_str, scene_id_key)
@@ -789,7 +778,7 @@ class MediaAIClient:
         scene_media_url = resolve_media_url(self.media_base_url, scene_url_val)
         style_path = assets_dir / f"style-image{extension_from_url(style_media_url)}"
         scene_path = assets_dir / f"scene-reference{extension_from_url(scene_media_url)}"
-        log_debug("build_first_frame_task downloading assets style_url=%s scene_url=%s", style_media_url, scene_media_url)
+        _logger.debug("build_first_frame_task downloading assets style_url={style} scene_url={scene}", style=style_media_url, scene=scene_media_url)
         self.download_file(style_media_url, style_path, cookie=cookie)
         self.download_file(scene_media_url, scene_path, cookie=cookie)
 

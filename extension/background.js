@@ -126,6 +126,7 @@ async function runJobInFreshTab(job) {
   let tabId = null;
   let windowId = null;
   let jobTimedOut = false;
+  let jobSucceeded = false;
 
   try {
     const freshTarget = await openJobTab(job);
@@ -151,11 +152,17 @@ async function runJobInFreshTab(job) {
     });
 
     await sendJobWithTimeout;
+    jobSucceeded = true;
   } finally {
-    if (windowId !== null) {
-      await chrome.windows.remove(windowId).catch(() => {});
-    } else if (tabId !== null) {
-      await chrome.tabs.remove(tabId).catch(() => {});
+    // Only close window/tab on success — on error leave page open for debugging
+    if (jobSucceeded) {
+      if (windowId !== null) {
+        await chrome.windows.remove(windowId).catch(() => {});
+      } else if (tabId !== null) {
+        await chrome.tabs.remove(tabId).catch(() => {});
+      }
+    } else {
+      console.log("[runJobInFreshTab] job failed/error — page left open, tab:", tabId);
     }
     controllerState.busy = false;
     controllerState.currentJobId = null;

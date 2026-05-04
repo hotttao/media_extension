@@ -1,18 +1,378 @@
-// Dynamic imports for platform handlers
-let runGptJob, runJimengImageJob, runJimengVideoJob;
-let handlersLoaded = false;
+// GPT handler (inline — no module import needed)
+async function runGptJobHandler(job, serverUrl) {
+  const logs = [];
 
-async function ensureHandlersLoaded() {
-  if (handlersLoaded) return;
-  const [gpt, jimengImage, jimengVideo] = await Promise.all([
-    import("./content-handlers/gpt.js"),
-    import("./content-handlers/jimeng-image.js"),
-    import("./content-handlers/jimeng-video.js"),
-  ]);
-  runGptJob = gpt.runGptJob;
-  runJimengImageJob = jimengImage.runJimengImageJob;
-  runJimengVideoJob = jimengVideo.runJimengVideoJob;
-  handlersLoaded = true;
+  const record = async (message, details = null) => {
+    const at = new Date().toISOString();
+    const entry = { at, message };
+    if (details !== null && details !== undefined) {
+      entry.details = details;
+    }
+    logs.push(entry);
+    await notifyProgress(message);
+    await sendProgress(serverUrl, message, at, details);
+  };
+
+  try {
+    await record(`Preparing ${job.id}`);
+    const composer = await waitFor(() => findComposer(), { timeoutMs: 120000, label: "prompt composer" });
+
+    await record("Uploading reference images");
+    await uploadAssets(job);
+
+    await record("Writing prompt");
+    setComposerText(composer, job.prompt);
+    await delay(500);
+
+    const baselineAssistantCount = getAssistantTurnElements().length;
+    const baselineAssistantImageKeys = collectAllAssistantImageKeys();
+    const baselinePageImageKeys = collectImageKeys(getImageSearchRoot());
+
+    await record("Submitting job", {
+      composerPath: getElementPath(composer),
+      visibleButtons: collectVisibleButtons(),
+    });
+
+    const submitResult = await submitPrompt(composer, baselineAssistantCount);
+    await record("Submit triggered", submitResult);
+    if (!submitResult.submitted) {
+      throw new Error("Prompt did not submit");
+    }
+
+    await record("Waiting for generated images");
+    let responseCapture = null;
+    try {
+      responseCapture = await waitForAssistantResponseImages(
+        baselineAssistantImageKeys,
+        job.timeoutSeconds ? job.timeoutSeconds * 1000 : DEFAULT_TIMEOUT_MS
+      );
+    } catch (_error) {
+      responseCapture = await waitForGeneratedImagesAnywhere(
+        baselinePageImageKeys,
+        job.timeoutSeconds ? job.timeoutSeconds * 1000 : DEFAULT_TIMEOUT_MS
+      );
+      await record("Assistant-scope detection missed images; used page-wide fallback", {
+        imageCount: responseCapture.images.length,
+      });
+    }
+
+    await record(`Found ${responseCapture.images.length} generated image(s)`, {
+      assistantTurn: responseCapture.assistantTurn,
+    });
+
+    const serializedImages = await serializeImages(responseCapture.images);
+    await record("Saving results to local bridge", {
+      imageCount: serializedImages.length,
+    });
+
+    await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/result`, {
+      images: serializedImages,
+      logs,
+    });
+
+    controllerState.lastError = null;
+    controllerState.lastMessage = `Completed ${job.id}`;
+    await chrome.runtime.sendMessage({ type: "content:finished", jobId: job.id, state: { ...controllerState } });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    logs.push({ at: new Date().toISOString(), message: `Failed: ${reason}` });
+    try {
+      await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/fail`, {
+        reason,
+        logs,
+      });
+    } catch (_postError) {
+      // Ignore reporting errors.
+    }
+    controllerState.lastError = reason;
+    controllerState.lastMessage = `Failed ${job.id}`;
+    await chrome.runtime.sendMessage({ type: "content:failed", jobId: job.id, reason, state: { ...controllerState } });
+  }
+}
+
+// Jimeng image handler (inline — mirrors jimeng-image.js logic)
+async function runJimengImageJobHandler(job, serverUrl) {
+  const logs = [];
+
+  const record = async (message, details = null) => {
+    const at = new Date().toISOString();
+    const entry = { at, message };
+    if (details !== null && details !== undefined) { entry.details = details; }
+    logs.push(entry);
+    await notifyProgress(message);
+    await sendProgress(serverUrl, message, at, details);
+  };
+
+  const snapshotDOM = () => {
+    try {
+      const comboboxes = Array.from(document.querySelectorAll('[role="combobox"]')).map(el => el.textContent.trim().slice(0, 60));
+      const buttons = Array.from(document.querySelectorAll('button')).filter(el => el.getBoundingClientRect().width > 0).map(el => el.textContent.trim().slice(0, 40));
+      const fileInputs = Array.from(document.querySelectorAll('input[type="file"]')).length;
+      return JSON.stringify({ comboboxes, buttons, fileInputs, url: window.location.href.slice(0, 80) });
+    } catch { return "{}"; }
+  };
+
+  try {
+    await record(`Preparing ${job.id}`);
+
+    if (window.location.href !== job.targetUrl) {
+      await record("Navigating to Jimeng");
+      window.location.href = job.targetUrl;
+      await waitFor(() => window.location.href.includes("type=image"), { timeoutMs: 30000, label: "jimeng image page" });
+      await delay(2000);
+    } else {
+      await delay(1000);
+    }
+
+    await record("Waiting for page to be ready");
+    await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 20000, label: "combobox" });
+    await waitFor(() => document.querySelector('input[type="file"]'), { timeoutMs: 10000, label: "file_input" });
+    await delay(500);
+
+    await record("Selecting model 图片5.0 Lite");
+    {
+      const r = await window.stepModel();
+      if (!r.ok) { throw new Error(`[S3] ${r.error} | DOM: ${snapshotDOM()}`); }
+    }
+    await delay(300);
+
+    await record("Selecting ratio 9:16 and resolution 2K");
+    {
+      const r = await window.stepRatio();
+      if (!r.ok) { throw new Error(`[S4] ${r.error} | DOM: ${snapshotDOM()}`); }
+    }
+    await delay(300);
+
+    await record("Uploading reference images");
+    {
+      const r = await window.stepUpload(job);
+      if (!r.ok) { throw new Error(`[S5] ${r.error} | DOM: ${snapshotDOM()}`); }
+    }
+
+    await record("Writing prompt");
+    {
+      const r = await window.stepPrompt(job);
+      if (!r.ok) { throw new Error(`[S6] ${r.error} | DOM: ${snapshotDOM()}`); }
+    }
+
+    await record("Clicking generate button");
+    {
+      const r = await window.stepGenerate();
+      if (!r.ok) { throw new Error(`[S7] ${r.error} | DOM: ${snapshotDOM()}`); }
+    }
+    await delay(1000);
+
+    await record("Waiting for generated images");
+    const waitResult = await window.stepWait(job);
+    if (!waitResult.ok) { throw new Error(`[S8] ${waitResult.error} | DOM: ${snapshotDOM()}`); }
+
+    const resultImages = waitResult.data.images;
+    await record(`Found ${resultImages.length} generated image(s)`);
+
+    const serializedImages = [];
+    for (let i = 0; i < resultImages.length; i++) {
+      const img = resultImages[i];
+      try {
+        const response = await fetch(img.src, { credentials: "include" });
+        if (!response.ok) continue;
+        const blob = await response.blob();
+        const mimeType = blob.type || "image/png";
+        const base64 = await blobToBase64(blob);
+        const ext = ({ "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif" })[mimeType] || ".png";
+        serializedImages.push({
+          filename: `result-${String(i + 1).padStart(2, "0")}${ext}`,
+          mimeType,
+          base64Data: base64,
+          sourceUrl: img.src,
+        });
+      } catch (err) {
+        await record(`Failed to serialize image ${i + 1}: ${err.message}`);
+      }
+    }
+
+    await record("Saving results to local bridge", { imageCount: serializedImages.length });
+    await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/result`, {
+      images: serializedImages,
+      logs,
+    });
+
+    controllerState.lastError = null;
+    controllerState.lastMessage = `Completed ${job.id}`;
+    await chrome.runtime.sendMessage({ type: "content:finished", jobId: job.id, state: { ...controllerState } });
+
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error("[JimengImage ERROR]", reason, "\nFull logs:", logs);
+    logs.push({ at: new Date().toISOString(), message: `Failed: ${reason}` });
+    try {
+      await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/fail`, { reason, logs });
+    } catch (_postError) { /* ignore */ }
+    controllerState.lastError = reason;
+    controllerState.lastMessage = `Failed ${job.id}`;
+    await chrome.runtime.sendMessage({ type: "content:failed", jobId: job.id, reason, state: { ...controllerState } });
+  }
+}
+
+// Jimeng video handler (inline)
+async function runJimengVideoJobHandler(job, serverUrl) {
+  const logs = [];
+  const record = async (message, details = null) => {
+    const at = new Date().toISOString();
+    const entry = { at, message };
+    if (details !== null && details !== undefined) entry.details = details;
+    logs.push(entry);
+    await notifyProgress(message);
+    await sendProgress(serverUrl, message, at, details);
+  };
+
+  const fetchAssetAsFileVideo = async (asset) => {
+    const response = await bridgeFetch({ url: asset.url, responseType: "blobBase64" });
+    const binary = atob(response.base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const mimeType = asset.mimeType || response.mimeType || "application/octet-stream";
+    return new File([bytes], asset.name, { type: mimeType });
+  };
+
+  const uploadFirstFrameImage = async (asset) => {
+    const fileInput = await waitFor(() => Array.from(document.querySelectorAll("input[type='file']")).find(input => isVisible(input) || input.offsetParent !== null), { timeoutMs: 30000, label: "file input for image upload" });
+    if (!fileInput) throw new Error("File input not found for image upload");
+    const file = await fetchAssetAsFileVideo(asset);
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+    fileInput.files = dataTransfer.files;
+    fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    fileInput.dispatchEvent(new Event("input", { bubbles: true }));
+    await delay(2000);
+  };
+
+  const fillInput = (input, text) => {
+    input.focus();
+    const currentValue = input.value || "";
+    if (currentValue === text) return;
+    if ("value" in input) {
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.value = text;
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    } else {
+      const inserted = document.execCommand("insertText", false, text);
+      if (!inserted) {
+        input.textContent = text;
+        input.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
+      }
+    }
+    input.blur();
+  };
+
+  const waitForVideoResult = async (timeoutMs) => {
+    const deadline = Date.now() + timeoutMs;
+    let stableSince = 0;
+    let lastVideoSrc = "";
+    while (Date.now() < deadline) {
+      const videoElement = document.querySelector("video");
+      if (videoElement && isVisible(videoElement) && videoElement.src && videoElement.src !== lastVideoSrc) {
+        lastVideoSrc = videoElement.src;
+        if (!stableSince) stableSince = Date.now();
+        if (Date.now() - stableSince > 8000) return { sourceType: "videoElement", url: videoElement.src, element: videoElement };
+      }
+      const downloadLink = Array.from(document.querySelectorAll("a[href]")).find(a => a.href && (a.href.includes(".mp4") || a.href.includes(".webm")));
+      if (downloadLink && downloadLink.href !== lastVideoSrc) {
+        lastVideoSrc = downloadLink.href;
+        if (!stableSince) stableSince = Date.now();
+        if (Date.now() - stableSince > 8000) return { sourceType: "downloadLink", url: downloadLink.href, element: downloadLink };
+      }
+      await delay(2000);
+    }
+    throw new Error("Timed out while waiting for video result");
+  };
+
+  try {
+    await record(`Preparing ${job.id}`);
+
+    if (window.location.href !== job.targetUrl) {
+      await record("Navigating to Jimeng video page");
+      window.location.href = job.targetUrl;
+      await waitFor(() => window.location.href.includes("jimeng.jianying.com"), { timeoutMs: 30000, label: "page navigation" });
+      await delay(2000);
+    }
+
+    await record("Clicking 视频生成 tab");
+    const videoTab = await waitFor(() => Array.from(document.querySelectorAll("div, span, button")).find(el => isVisible(el) && el.innerText && el.innerText.includes("视频生成")), { timeoutMs: 30000, label: "视频生成 tab" });
+    if (videoTab) { videoTab.click(); await delay(1000); }
+
+    await record("Selecting Seedance1.0 首尾帧 model");
+    const modelOption = await waitFor(() => Array.from(document.querySelectorAll("div, span, button")).find(el => isVisible(el) && el.innerText && el.innerText.includes("Seedance1.0 首尾帧")), { timeoutMs: 30000, label: "Seedance1.0 model option" });
+    if (modelOption) { modelOption.click(); await delay(1000); }
+
+    await record("Uploading first frame image");
+    const firstFrameAsset = job.assets?.find(a => a.label === "firstFrame") || (job.assets?.length > 0 ? job.assets[0] : null);
+    if (firstFrameAsset) await uploadFirstFrameImage(firstFrameAsset);
+
+    await record("Filling movement description");
+    const movementText = job.movement || job.movementId || job.prompt || "";
+    const movementInput = await waitFor(() => Array.from(document.querySelectorAll("textarea, input")).find(el => isVisible(el) && (el.placeholder?.includes("运动") || el.placeholder?.includes("movement"))), { timeoutMs: 30000, label: "movement input" });
+    if (movementInput) { fillInput(movementInput, movementText); await delay(500); }
+
+    await record("Filling prompt text");
+    const promptInput = await waitFor(() => Array.from(document.querySelectorAll("textarea")).find(el => isVisible(el) && (el.placeholder?.includes("描述") || el.placeholder?.includes("prompt"))), { timeoutMs: 30000, label: "prompt input" });
+    if (promptInput) { fillInput(promptInput, job.prompt || ""); await delay(500); }
+
+    await record("Clicking generate button");
+    const generateButton = await waitFor(() => Array.from(document.querySelectorAll("button")).find(el => isVisible(el) && !el.disabled && (el.innerText?.includes("生成") || el.innerText?.includes("生成视频"))), { timeoutMs: 30000, label: "generate button" });
+    if (!generateButton) throw new Error("Generate button not found");
+    generateButton.click();
+
+    await record("Waiting for video result");
+    const videoResult = await waitForVideoResult(job.timeoutSeconds ? job.timeoutSeconds * 1000 : 600000);
+    await record(`Found video result`, { sourceType: videoResult.sourceType, url: videoResult.url });
+
+    await record("Serializing video");
+    let blob, mimeType = "video/mp4";
+    if (videoResult.sourceType === "videoElement") {
+      const response = await fetch(videoResult.url, { credentials: "include" });
+      if (!response.ok) throw new Error(`Failed to fetch video: ${response.status}`);
+      blob = await response.blob();
+      mimeType = blob.type || "video/mp4";
+    } else {
+      const response = await fetch(videoResult.url, { credentials: "include" });
+      if (!response.ok) throw new Error(`Failed to fetch video from download link: ${response.status}`);
+      blob = await response.blob();
+      mimeType = blob.type || "video/mp4";
+    }
+    const extension = mimeType.includes("webm") ? ".webm" : ".mp4";
+    const base64Data = await blobToBase64(blob);
+
+    await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/result`, {
+      videos: [{ filename: `result-001${extension}`, mimeType, base64Data, sourceUrl: videoResult.url }],
+      logs,
+    });
+
+    controllerState.lastError = null;
+    controllerState.lastMessage = `Completed ${job.id}`;
+    await chrome.runtime.sendMessage({ type: "content:finished", jobId: job.id, state: { ...controllerState } });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    logs.push({ at: new Date().toISOString(), message: `Failed: ${reason}` });
+    try { await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/fail`, { reason, logs }); } catch (_postError) { /* Ignore */ }
+    controllerState.lastError = reason;
+    controllerState.lastMessage = `Failed ${job.id}`;
+    await chrome.runtime.sendMessage({ type: "content:failed", jobId: job.id, reason, state: { ...controllerState } });
+  }
+}
+
+async function runJob(job, serverUrl) {
+  const platform = job.platform || "gpt";
+  if (platform === "gpt") {
+    await runGptJobHandler(job, serverUrl);
+  } else if (platform === "jimeng_image") {
+    await runJimengImageJobHandler(job, serverUrl);
+  } else if (platform === "jimeng_video") {
+    await runJimengVideoJobHandler(job, serverUrl);
+  } else {
+    throw new Error(`Unknown platform: ${platform}`);
+  }
 }
 
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
@@ -692,20 +1052,6 @@ function stopController() {
     pollTimer = null;
   }
   return { ...controllerState };
-}
-
-async function runJob(job, serverUrl) {
-  await ensureHandlersLoaded();
-  const platform = job.platform || "gpt";
-  if (platform === "gpt") {
-    await runGptJob(job, serverUrl);
-  } else if (platform === "jimeng_image") {
-    await runJimengImageJob(job, serverUrl);
-  } else if (platform === "jimeng_video") {
-    await runJimengVideoJob(job, serverUrl);
-  } else {
-    throw new Error(`Unknown platform: ${platform}`);
-  }
 }
 
 async function pollForJobs() {

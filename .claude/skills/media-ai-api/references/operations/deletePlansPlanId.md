@@ -1,22 +1,23 @@
-# GET /api/tools/combination/style-images
+# DELETE /api/plans/{planId}
 
-**Resource:** [tools](../resources/tools.md)
-**GET tools combination style images**
-**Operation ID:** `getToolsCombinationStyleImages`
+**Resource:** [plans](../resources/plans.md)
+**DELETE plans planId**
+**Operation ID:** `deletePlansPlanId`
 
 ## Parameters
 
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
-| `productId` | query | string | No |  |
+| `planId` | path | string | Yes |  |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
 | 200 | Success |
-| 400 | Error |
 | 401 | Error |
+| 403 | Error |
+| 404 | Error |
 | 500 | Error |
 
 **Success Response Schema:**

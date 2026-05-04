@@ -91,10 +91,10 @@ class Job:
 **kind → platform 映射（build_jobs 中定义）：**
 ```
 jimeng-image       → platform="jimeng_image", targetUrl="...?type=image"
-first-frame-image  → platform="jimeng_image", targetUrl="...?type=image"
-style-image        → platform="jimeng_image", targetUrl="...?type=image"
-model-image        → platform="jimeng_image", targetUrl="...?type=image"
 jimeng-video       → platform="jimeng_video", targetUrl="...?type=video"
+first-frame-image  → platform="gpt"
+style-image        → platform="gpt"
+model-image        → platform="gpt"
 (其他)              → platform=None, targetUrl=None
 ```
 
@@ -142,39 +142,95 @@ pending → claimed → completed
 - 收到 401/403 自动清除缓存，重新登录并更新缓存
 - 显式传入的 cookie（`--cookie`、`--cookie-file`、环境变量）不经过缓存校验
 
-## 提交任务的正确方式
+## 任务提交文档
 
-### 即梦生图（jimeng-image）
+### Submit 脚本 → API 端点 → Platform 映射总表
+
+| Submit 脚本 | API 端点 | HTTP | Task kind | Platform | 说明 |
+|------------|---------|------|-----------|----------|------|
+| `scripts/submit_jimeng_image.py` | `/v1/single/jimeng-image` | POST | `jimeng-image` | `jimeng_image` | 即梦文生图（插件直接调 single endpoint） |
+| `scripts/submit_jimeng_video.py` | `/v1/single/jimeng-video` | POST | `jimeng-video` | `jimeng_video` | 即梦文生视频（插件直接调 single endpoint） |
+| `scripts/submit_media_ai_first_frame_images.py` | `/v1/jobs` | POST | `first-frame-image` | `gpt` | 批量提交首帧图任务 |
+| `scripts/submit_media_ai_style_images.py` | `/v1/jobs` | POST | `style-image` | `gpt` | 批量提交定妆图任务 |
+| `scripts/submit_media_ai_model_images.py` | `/v1/jobs` | POST | `model-image` | `gpt` | 批量提交模特图任务 |
+
+### Platform 说明
+
+- **`gpt`**：GPT 生图任务，插件轮询 `/v1/job/claim` 认领后执行浏览器自动化（ChatGPT）
+- **`jimeng_image`**：即梦图片任务，即梦插件自动化（jimeng.jianying.com 图片模式）
+- **`jimeng_video`**：即梦视频任务，即梦插件自动化（jimeng.jianying.com 视频模式）
+
+### 使用示例
+
+#### 直接 HTTP API（curl）
+
+**POST /v1/jobs** — 批量提交任务文件：
 ```bash
+curl -X POST http://localhost:8765/v1/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"caseFiles": ["runs/xxx/task.md"]}'
+```
+
+**POST /v1/single/jimeng-image** — 即梦文生图：
+```bash
+curl -X POST http://localhost:8765/v1/single/jimeng-image \
+  -H "Content-Type: application/json" \
+  -d '{"styleImageId": "<id>", "sceneId": "<id>"}'
+```
+
+**POST /v1/single/jimeng-video** — 即梦文生视频：
+```bash
+curl -X POST http://localhost:8765/v1/single/jimeng-video \
+  -H "Content-Type: application/json" \
+  -d '{"productId": "<id>", "firstFrameId": "<id>"}'
+```
+
+**POST /v1/single/first-frame-image** — 首帧图（GPT）：
+```bash
+curl -X POST http://localhost:8765/v1/single/first-frame-image \
+  -H "Content-Type: application/json" \
+  -d '{"styleImageId": "<id>", "sceneId": "<id>"}'
+```
+
+**POST /v1/single/style-image** — 定妆图（GPT）：
+```bash
+curl -X POST http://localhost:8765/v1/single/style-image \
+  -H "Content-Type: application/json" \
+  -d '{"modelImageId": "<id>", "poseId": "<id>"}'
+```
+
+**POST /v1/single/model-image** — 模特图（GPT）：
+```bash
+curl -X POST http://localhost:8765/v1/single/model-image \
+  -H "Content-Type: application/json" \
+  -d '{"productId": "<id>", "ipId": "<id>"}'
+```
+
+#### Submit 脚本（推荐）
+
+```bash
+# 即梦生图
 PYTHONPATH=. uv run python scripts/submit_jimeng_image.py \
-  --style-image-id <id> \
-  --scene-id <id> \
-  --dry-run
-```
+  --style-image-id <id> --scene-id <id>
 
-### 即梦视频（jimeng-video）
-```bash
+# 即梦视频
 PYTHONPATH=. uv run python scripts/submit_jimeng_video.py \
-  --first-frame-id <id> \
-  --pose-id <id> \
-  --dry-run
-```
+  --first-frame-id <id> --pose-id <id>
 
-### 定妆图（style-image）
-```bash
-PYTHONPATH=. uv run python scripts/submit_media_ai_style_images.py \
-  --product-id <id> \
-  --model-image-id <id> \
-  --dry-run
-```
-
-### 首帧图（first-frame-image）
-```bash
+# GPT 首帧图
 PYTHONPATH=. uv run python scripts/submit_media_ai_first_frame_images.py \
-  --style-image-id <id> \
-  --scene-id <id> \
-  --dry-run
+  --style-image-id <id> --scene-id <id> --dry-run
+
+# GPT 定妆图
+PYTHONPATH=. uv run python scripts/submit_media_ai_style_images.py \
+  --model-image-id <id> --pose-id <id> --dry-run
+
+# GPT 模特图
+PYTHONPATH=. uv run python scripts/submit_media_ai_model_images.py \
+  --product-id <id> --dry-run
 ```
+
+> **路由逻辑**：API `/v1/jobs` 收到 caseFiles 后，`build_jobs()` 读取 `task.media-ai.json` 的 `kind` 字段决定 platform——`jimeng-image` → `jimeng_image`，`first-frame-image/style-image/model-image` → `gpt`，`jimeng-video` → `jimeng_video`。插件 claim 到 job 后读取 `job.platform` 选择对应 handler 执行。
 
 ## 核心文件
 

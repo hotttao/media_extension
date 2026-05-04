@@ -1,14 +1,14 @@
-# GET /api/tools/combination/style-images
+# DELETE /api/alternative-images/{id}
 
-**Resource:** [tools](../resources/tools.md)
-**GET tools combination style images**
-**Operation ID:** `getToolsCombinationStyleImages`
+**Resource:** [alternative-images](../resources/alternative-images.md)
+**DELETE alternative images id**
+**Operation ID:** `deleteAlternativeImagesId`
 
 ## Parameters
 
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
-| `productId` | query | string | No |  |
+| `id` | path | string | Yes |  |
 
 ## Responses
 
@@ -17,6 +17,8 @@
 | 200 | Success |
 | 400 | Error |
 | 401 | Error |
+| 403 | Error |
+| 404 | Error |
 | 500 | Error |
 
 **Success Response Schema:**

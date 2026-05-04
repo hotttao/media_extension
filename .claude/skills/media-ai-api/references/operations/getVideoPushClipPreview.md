@@ -1,14 +1,15 @@
-# GET /api/tools/combination/style-images
+# GET /api/video-push/clip-preview
 
-**Resource:** [tools](../resources/tools.md)
-**GET tools combination style images**
-**Operation ID:** `getToolsCombinationStyleImages`
+**Resource:** [video-push](../resources/video-push.md)
+**GET video push clip preview**
+**Operation ID:** `getVideoPushClipPreview`
 
 ## Parameters
 
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
 | `productId` | query | string | No |  |
+| `ipId` | query | string | No |  |
 
 ## Responses
 

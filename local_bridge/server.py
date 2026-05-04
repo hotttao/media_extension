@@ -41,42 +41,51 @@ IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 
 # ---------------------------------------------------------------------------
-# Structured Logging
+# Structured Logging (Loguru)
 # ---------------------------------------------------------------------------
 
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG").upper()
+from loguru import logger as _logger
+logger = _logger  # for external imports
+
 _LOG_DIR = pathlib.Path("logs")
 _LOG_DIR.mkdir(exist_ok=True)
-_logger = logging.getLogger("local_bridge")
-_logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
-_logger.handlers.clear()
-_fh = logging.FileHandler(_LOG_DIR / "server.log", encoding="utf-8")
-_fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
-_logger.addHandler(_fh)
+_LOG_FILE = _LOG_DIR / "server.log"
 
-
-def _log(level: int, msg: str, *args: Any, **kwargs: Any) -> None:
-    extra: dict[str, Any] = {}
-    for k, v in kwargs.items():
-        extra[f"extra_{k}"] = v
-    formatted = msg % args if args else msg
-    _logger.log(level, formatted, extra=extra if extra else None)
+# Remove default handler, add file + stderr
+_logger.remove()
+logger_id_file = _logger.add(
+    _LOG_FILE,
+    format="{time:HH:mm:ss} | {level} | {message}",
+    level=os.environ.get("LOG_LEVEL", "DEBUG").upper(),
+    rotation="100 MB",
+    retention="7 days",
+    encoding="utf-8",
+    enqueue=True,
+    backtrace=True,
+    diagnose=True,
+)
+logger_id_console = _logger.add(
+    sys.stderr,
+    format="<green>{time:HH:mm:ss}</green> | <level>{level}</level> | <level>{message}</level>",
+    level=os.environ.get("LOG_LEVEL", "DEBUG").upper(),
+    colorize=True,
+)
 
 
 def log_info(msg: str, *args: Any, **kwargs: Any) -> None:
-    _log(logging.INFO, msg, *args, **kwargs)
+    _logger.info(msg, *args, **kwargs)
 
 
 def log_debug(msg: str, *args: Any, **kwargs: Any) -> None:
-    _log(logging.DEBUG, msg, *args, **kwargs)
+    _logger.debug(msg, *args, **kwargs)
 
 
 def log_error(msg: str, *args: Any, **kwargs: Any) -> None:
-    _log(logging.ERROR, msg, *args, **kwargs)
+    _logger.error(msg, *args, **kwargs)
 
 
 def log_warning(msg: str, *args: Any, **kwargs: Any) -> None:
-    _log(logging.WARNING, msg, *args, **kwargs)
+    _logger.warning(msg, *args, **kwargs)
 
 
 def utc_now_iso() -> str:
@@ -358,12 +367,14 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
         target_url: str | None = None
         if media_ai:
             kind = media_ai.get("kind") or ""
-            if kind in ("jimeng-image", "first-frame-image", "style-image", "model-image"):
+            if kind == "jimeng-image":
                 platform = "jimeng_image"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
             elif kind == "jimeng-video":
                 platform = "jimeng_video"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
+            elif kind in ("first-frame-image", "style-image", "model-image"):
+                platform = "gpt"
 
         jobs.append(
             Job(
@@ -503,6 +514,7 @@ def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[s
             "sceneId": job.media_ai.get("sceneId"),
             "composition": job.media_ai.get("composition"),
             "imageUrl": image_url,
+            "generationPath": "gpt",
         }
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     elif kind in ("jimeng_image",):
@@ -510,7 +522,7 @@ def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[s
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
         if not ip_id:
             raise RuntimeError("Media AI jimeng_image sidecar requires ipId.")
-        save_body = {"ipId": ip_id, "imageUrl": image_url}
+        save_body = {"ipId": ip_id, "imageUrl": image_url, "generationPath": "gpt"}
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     else:
         ip_id = ensure_text(job.media_ai.get("ipId") or "")

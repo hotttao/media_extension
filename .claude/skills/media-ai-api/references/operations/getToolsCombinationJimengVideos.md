@@ -1,8 +1,8 @@
-# GET /api/tools/combination/style-images
+# GET /api/tools/combination/jimeng-videos
 
 **Resource:** [tools](../resources/tools.md)
-**GET tools combination style images**
-**Operation ID:** `getToolsCombinationStyleImages`
+**GET tools combination jimeng videos**
+**Operation ID:** `getToolsCombinationJimengVideos`
 
 ## Parameters
 
@@ -15,7 +15,6 @@
 | Status | Description |
 |--------|-------------|
 | 200 | Success |
-| 400 | Error |
 | 401 | Error |
 | 500 | Error |
 

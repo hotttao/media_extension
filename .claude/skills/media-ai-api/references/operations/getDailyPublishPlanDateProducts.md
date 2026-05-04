@@ -1,14 +1,14 @@
-# GET /api/tools/combination/style-images
+# GET /api/daily-publish-plan/{date}/products
 
-**Resource:** [tools](../resources/tools.md)
-**GET tools combination style images**
-**Operation ID:** `getToolsCombinationStyleImages`
+**Resource:** [daily-publish-plan](../resources/daily-publish-plan.md)
+**GET daily publish plan date products**
+**Operation ID:** `getDailyPublishPlanDateProducts`
 
 ## Parameters
 
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
-| `productId` | query | string | No |  |
+| `date` | path | string | Yes |  |
 
 ## Responses
 

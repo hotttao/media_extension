@@ -1,9 +1,9 @@
-"""Router for POST /v1/single/first-frame-image."""
 from fastapi import APIRouter, HTTPException, Request
 from local_bridge.api.schemas import (
     FirstFrameImageCreateRequest,
     SingleJobCreatedResponse,
 )
+from loguru import logger
 
 router = APIRouter(tags=["single"])
 
@@ -36,13 +36,15 @@ def create_first_frame_image(body: FirstFrameImageCreateRequest, request: Reques
             prompt=prompt,
             force=force,
         )
-    except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
+    except Exception:
+        logger.exception("[first-frame] exception")
+        raise HTTPException(status_code=500, detail="internal error")
 
     if status == "exists":
         raise HTTPException(status_code=409, detail="first frame already exists for this style image/scene pair")
     if case_path is None:
-        raise HTTPException(status_code=500, detail="task build failed")
+        logger.error("[first-frame] build failed status={status}", status=status)
+        raise HTTPException(status_code=500, detail=f"task build failed: {status}")
 
     dry_run = "dry-run" in request.query_params or "dry_run" in request.query_params
     if dry_run:

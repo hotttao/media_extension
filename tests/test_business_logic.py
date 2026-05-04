@@ -143,8 +143,8 @@ class Test_build_jobs:
         jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
         assert jobs[0].media_ai is not None
         assert jobs[0].media_ai["styleImageId"] == "s1"
-    def test_style_image_kind_maps_to_jimeng_platform(self, tmp_path: pathlib.Path) -> None:
-        """style-image kind should resolve to jimeng_image platform."""
+    def test_style_image_kind_maps_to_gpt_platform(self, tmp_path: pathlib.Path) -> None:
+        """style-image kind should resolve to gpt platform."""
         case_dir = tmp_path / "style_case"
         case_dir.mkdir()
         (case_dir / "task.md").write_text("style prompt", encoding="utf-8")
@@ -154,12 +154,12 @@ class Test_build_jobs:
         )
         jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
         assert len(jobs) == 1
-        assert jobs[0].platform == "jimeng_image"
-        assert jobs[0].target_url == "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
+        assert jobs[0].platform == "gpt"
+        assert jobs[0].target_url is None
         assert jobs[0].media_ai["styleImageId"] == "s1"
 
-    def test_model_image_kind_maps_to_jimeng_platform(self, tmp_path: pathlib.Path) -> None:
-        """model-image kind should resolve to jimeng_image platform."""
+    def test_model_image_kind_maps_to_gpt_platform(self, tmp_path: pathlib.Path) -> None:
+        """model-image kind should resolve to gpt platform."""
         case_dir = tmp_path / "model_case"
         case_dir.mkdir()
         (case_dir / "task.md").write_text("model prompt", encoding="utf-8")
@@ -169,11 +169,11 @@ class Test_build_jobs:
         )
         jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
         assert len(jobs) == 1
-        assert jobs[0].platform == "jimeng_image"
-        assert jobs[0].target_url == "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
+        assert jobs[0].platform == "gpt"
+        assert jobs[0].target_url is None
 
-    def test_first_frame_image_kind_maps_to_jimeng_platform(self, tmp_path: pathlib.Path) -> None:
-        """first-frame-image kind should resolve to jimeng_image platform."""
+    def test_first_frame_image_kind_maps_to_gpt_platform(self, tmp_path: pathlib.Path) -> None:
+        """first-frame-image kind should resolve to gpt platform."""
         case_dir = tmp_path / "ff_case"
         case_dir.mkdir()
         (case_dir / "task.md").write_text("first frame prompt", encoding="utf-8")
@@ -183,8 +183,8 @@ class Test_build_jobs:
         )
         jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
         assert len(jobs) == 1
-        assert jobs[0].platform == "jimeng_image"
-        assert jobs[0].target_url == "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
+        assert jobs[0].platform == "gpt"
+        assert jobs[0].target_url is None
 
     def test_wrong_sidecar_name_not_read(self, tmp_path: pathlib.Path) -> None:
         """Sidecar named .media-ai.json (old buggy name) should NOT be read."""

@@ -15,8 +15,8 @@ This API documentation is split into multiple files for on-demand loading.
 **Directory structure:**
 ```
 references/
-├── resources/      # 16 resource index files
-├── operations/     # 74 operation detail files
+├── resources/      # 20 resource index files
+├── operations/     # 94 operation detail files
 └── schemas/        # 25 schema groups, 51 schema files
 ```
 
@@ -32,11 +32,14 @@ references/
 
 ## Resources
 
-- **products** → `references/resources/products.md` (23 ops)
+- **products** → `references/resources/products.md` (24 ops)
 - **ips** → `references/resources/ips.md` (8 ops)
 - **materials** → `references/resources/materials.md` (8 ops)
-- **tools** → `references/resources/tools.md` (6 ops)
+- **tools** → `references/resources/tools.md` (8 ops)
+- **daily-publish-plan** → `references/resources/daily-publish-plan.md` (6 ops)
+- **video-push** → `references/resources/video-push.md` (6 ops)
 - **movements** → `references/resources/movements.md` (5 ops)
+- **alternative-images** → `references/resources/alternative-images.md` (4 ops)
 - **videos** → `references/resources/videos.md` (4 ops)
 - **auth** → `references/resources/auth.md` (3 ops)
 - **workflows** → `references/resources/workflows.md` (3 ops)
@@ -46,5 +49,6 @@ references/
 - **style-images** → `references/resources/style-images.md` (2 ops)
 - **tasks** → `references/resources/tasks.md` (2 ops)
 - **teams** → `references/resources/teams.md` (2 ops)
+- **plans** → `references/resources/plans.md` (1 ops)
 - **upload** → `references/resources/upload.md` (1 ops)
 - **webhooks** → `references/resources/webhooks.md` (1 ops)

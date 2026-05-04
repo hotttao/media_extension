@@ -4,6 +4,7 @@
 
 | Method | Path | Summary | Details |
 |--------|------|---------|----------|
+| POST | `/api/products/{id}/first-frame-upload` | POST products id first frame upload | [View](../operations/postProductsIdFirstFrameUpload.md) |
 | GET | `/api/products/{id}/first-frame` | GET products id first frame | [View](../operations/getProductsIdFirstFrame.md) |
 | POST | `/api/products/{id}/first-frame` | POST products id first frame | [View](../operations/postProductsIdFirstFrame.md) |
 | GET | `/api/products/{id}/first-frames` | GET products id first frames | [View](../operations/getProductsIdFirstFrames.md) |

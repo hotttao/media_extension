@@ -381,13 +381,12 @@ def main() -> int:
             print(f"[SKIP] {style_image_id} has no usable scene intersection.")
             continue
 
-        existing = client.existing_first_frames(product_id, style_image_id)
-        existing_scene_ids = {str(item.get("sceneId") or "") for item in existing}
-
         for scene in chosen_scenes:
             current_scene_id = scene_key(scene)
             current_scene_name = scene_name(scene)
-            if current_scene_id in existing_scene_ids:
+
+            existing = client.existing_first_frames(product_id, style_image_id, current_scene_id)
+            if existing:
                 skipped.append(
                     {
                         "productId": product_id,

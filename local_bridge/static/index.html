@@ -789,7 +789,7 @@ function renderTable(jobs) {
 
   const rows = filtered.map(job => {
     const latest = job.latestProgress || {};
-    const canRequeue = ['failed', 'canceled', 'completed'].includes(job.status);
+    const canRequeue = ['failed', 'canceled', 'completed', 'running'].includes(job.status);
     const canCancel = job.status === 'pending';
     const canDelete = !canCancel && job.status !== 'running';
     const isRunning = job.status === 'running';

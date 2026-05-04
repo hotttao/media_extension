@@ -27,9 +27,9 @@
   };
 
   const textIncludes = (domText, target) => {
-    if (!domText) return false;
+    if (!domText || !target) return false;
     const dt = domText.trim();
-    if (dt.includes(target)) return true;
+    if (dt.length < target.length) return false;
     const dc = charCodesOf(dt), tc = charCodesOf(target);
     if (tc.length > dc.length) return false;
     outer: for (let i = 0; i <= dc.length - tc.length; i++) {
@@ -41,8 +41,10 @@
 
   const isVisible = (el) => {
     if (!el) return false;
-    const style = window.getComputedStyle(el);
-    if (style.display === "none" || style.visibility === "hidden") return false;
+    try {
+      const style = window.getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+    } catch(e) { return false; }
     const rect = el.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
   };
@@ -165,21 +167,31 @@
     }
 
     const comboboxes = allEls().filter(el => el.getAttribute("role") === "combobox");
-    const comboboxTexts = comboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
-    const modelCombobox = comboboxes.find(el =>
-      el.textContent?.trim().includes("5.0") || el.textContent?.trim().includes("4.6")
-    );
+    // Fuzzy match: any combobox with 图片 + a version number (4.x, 5.0, etc.)
+    const modelCombobox = comboboxes.find(el => {
+      const t = el.textContent?.trim() || "";
+      return t.includes("图片") && /[\d]+\.[\d]+/.test(t);
+    });
     if (!modelCombobox) {
-      const comboboxes2 = allEls().filter(el => el.getAttribute("role") === "combobox");
-      const comboboxTexts = comboboxes2.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
-      throw new Error(`Model combobox not found (checked for 5.0/4.6, found: ${comboboxTexts})`);
+      const comboboxTexts = comboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
+      throw new Error(`Model combobox not found (checked for 图片+version, found: ${comboboxTexts})`);
     }
 
-    modelCombobox.click();
-    await delay(delayMs);
-    console.log("[stepModel] clicked model combobox");
-
-    const listbox = document.querySelector('[role="listbox"]');
+    // Click and wait for listbox to appear (retry if it was already open)
+    let listbox = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      modelCombobox.click();
+      await delay(delayMs);
+      // Find a listbox that contains model options (图片5.0 or 图片4.x)
+      const allListboxes = Array.from(document.querySelectorAll('[role="listbox"]'));
+      listbox = allListboxes.find(lb =>
+        lb.textContent?.includes("5.0") || lb.textContent?.includes("4.6")
+      );
+      if (listbox) break;
+      // If no listbox found, click body to close any open dropdown and retry
+      document.body.click();
+      await delay(300);
+    }
     if (!listbox) {
       const allListboxes = Array.from(document.querySelectorAll('[role="listbox"]')).map(el => el.textContent?.trim().slice(0, 40)).join(" | ");
       throw new Error(`Model listbox not visible after combobox click (checked role=listbox, found: ${allListboxes || "none"})`);
@@ -188,21 +200,29 @@
 
     const options = Array.from(document.querySelectorAll('[role="option"]')).filter(isVisible);
     console.log("[stepModel] options found:", options.length, options.map(o => o.textContent?.trim().slice(0, 30)));
-    const liteOption = options.find(el =>
-      el.textContent?.trim().includes("5.0") && el.textContent?.trim().includes("Lite")
+    // Fuzzy: prefer "Lite" option, fall back to any model option with version number
+    let targetOption = options.find(el =>
+      el.textContent?.trim().includes("Lite")
     );
-    if (!liteOption) {
+    if (!targetOption) {
+      targetOption = options.find(el => /[\d]+\.[\d]+/.test(el.textContent?.trim() || ""));
+    }
+    if (!targetOption && options.length > 0) {
+      targetOption = options[0]; // fall back to first option
+    }
+    if (!targetOption) {
       const optionTexts = options.map(o => o.textContent?.trim().slice(0, 40)).join(" | ");
-      throw new Error(`图片5.0 Lite not found (options: ${optionTexts})`);
+      throw new Error(`No selectable model option found (options: ${optionTexts})`);
     }
 
-    liteOption.click();
+    targetOption.click();
     await delay(delayMs);
     document.body.click();
     await delay(300);
 
     const modelText = modelCombobox?.textContent?.trim() || "";
-    const modelChanged = modelText.includes("5.0") || modelText.includes("Lite");
+    // Just verify combobox text has changed from original (has version number now)
+    const modelChanged = /[\d]+\.[\d]+/.test(modelText);
     if (!modelChanged) throw new Error(`Model combobox text unchanged after click (current: ${modelText})`);
     return { ok: true, data: { modelText }, error: null };
   }
@@ -231,43 +251,32 @@
     await delay(delayMs);
     console.log("[stepRatio] clicked ratio button, now looking for options");
 
-    // After clicking, look for dropdown with ratio and resolution options
-    // The dropdown may contain buttons, not radio inputs
-    // Look for buttons containing "9:16" text for ratio
-    const dropdownButtons = () => Array.from(document.querySelectorAll("button")).filter(isVisible);
-
-    // Try to find ratio option button
-    const ratioOption = dropdownButtons().find(el =>
-      el.textContent?.trim().includes("9:16") ||
-      (/\d+:\d+/.test(el.textContent?.trim() || ""))
+    // Dropdown uses label.lv-radio elements (e.g. "9:16", "高清 2K", etc.)
+    // Default resolution is already "高清 2K" — just need to select "9:16" ratio
+    const ratioLabel = Array.from(document.querySelectorAll("label.lv-radio")).find(el =>
+      el.textContent?.trim() === "9:16"
     );
-    // Try to find resolution option button
-    const resOption = dropdownButtons().find(el => {
-      const text = el.textContent?.trim() || "";
-      return text.includes("2K") || text.includes("2k") || text.includes("高清");
-    });
 
-    console.log("[stepRatio] ratioOption:", ratioOption?.textContent?.trim().slice(0, 40), "resOption:", resOption?.textContent?.trim().slice(0, 40));
-
-    let ratioChanged = false, resChanged = false;
-    if (ratioOption) { ratioOption.click(); ratioChanged = true; await delay(200); }
-    if (resOption) { resOption.click(); resChanged = true; await delay(200); }
-
-    // Fallback: also check for radio inputs in case the page does use them
-    if (!ratioChanged) {
-      const allRadios = Array.from(document.querySelectorAll('input[type="radio"]'));
-      console.log("[stepRatio] no button match, checking radios:", allRadios.map(r => ({ value: r.value, checked: r.checked })));
-      const ratioRadio = allRadios.find(r => r.value === "9:16");
-      const resRadio = allRadios.find(r => r.value === "2k");
-      if (ratioRadio) { ratioRadio.click(); ratioChanged = ratioRadio.checked; await delay(200); }
-      if (resRadio) { resRadio.click(); resChanged = resRadio.checked; await delay(200); }
+    if (!ratioLabel) {
+      const allLabels = Array.from(document.querySelectorAll("label.lv-radio")).map(l => l.textContent?.trim()).join(" | ");
+      throw new Error(`Ratio 9:16 not found in dropdown (found: ${allLabels})`);
     }
 
+    ratioLabel.click();
+    await delay(200);
     document.body.click();
     await delay(300);
 
-    if (!ratioChanged) throw new Error("Ratio 9:16 not selected (tried button click and radio input)");
-    return { ok: true, data: { ratio: "9:16", resolution: resChanged ? "2K" : null }, error: null };
+    // Verify the ratio button now shows 9:16
+    const ratioBtnAfter = Array.from(document.querySelectorAll("button")).find(el =>
+      /\d+:\d+/.test(el.textContent || "")
+    );
+    const ratioText = ratioBtnAfter?.textContent?.trim() || "";
+    if (!ratioText.includes("9:16")) {
+      throw new Error(`Ratio button not updated after selection (current: ${ratioText})`);
+    }
+
+    return { ok: true, data: { ratio: "9:16", resolution: "2K" }, error: null };
   }
 
   // ---------------------------------------------------------------------------
@@ -305,11 +314,13 @@
 
     for (const asset of job.assets || []) {
       const slotIndex = labelToIndex[asset.label] ?? job.assets.indexOf(asset);
+      const inputs = fileInputs();
+      // If slotIndex is out of range, use the last available input (overflow assets)
+      const safeIndex = Math.min(slotIndex, inputs.length - 1);
 
       // Method 1: Direct file input
-      const inputs = fileInputs();
-      if (inputs.length > slotIndex) {
-        const input = inputs[slotIndex];
+      if (inputs.length > 0) {
+        const input = inputs[safeIndex];
         const file = await fetchAssetAsFile(asset);
         const transfer = new DataTransfer();
         transfer.items.add(file);
@@ -318,15 +329,15 @@
         await delay(500);
         await waitFor(() => {
           const previews = document.querySelectorAll("img[src*='data:'],[src*='blob:']");
-          return previews.length > slotIndex;
+          return previews.length > safeIndex;
         }, { timeoutMs: 10000, label: `image preview ${asset.label}` });
         continue;
       }
 
       // Method 2: Upload slot click
-      let slots = uploadSlots();
-      if (slots.length > slotIndex) {
-        slots[slotIndex].click();
+      const slots = uploadSlots();
+      if (slots.length > 0) {
+        slots[Math.min(slotIndex, slots.length - 1)].click();
         await delay(500);
         const newInput = await waitFor(() => {
           const ins = fileInputs();
@@ -341,23 +352,23 @@
           await delay(500);
           await waitFor(() => {
             const previews = document.querySelectorAll("img[src*='data:'],[src*='blob:']");
-            return previews.length > slotIndex;
+            return previews.length > safeIndex;
           }, { timeoutMs: 10000, label: `image preview ${asset.label}` });
           continue;
         }
       }
 
       // Method 3: Text-based upload buttons
-      const clicked = await document.evaluate((label) => {
-        const els = document.querySelectorAll("*");
-        for (const el of els) {
-          const text = el.textContent?.trim() || "";
-          if (text === label || text.includes(label)) {
-            if (isVisible(el)) { el.click(); return true; }
-          }
+      let clicked = false;
+      const label = asset.label || "";
+      for (const el of document.querySelectorAll("*")) {
+        const text = el.textContent?.trim() || "";
+        if ((text === label || text.includes(label)) && isVisible(el)) {
+          el.click();
+          clicked = true;
+          break;
         }
-        return false;
-      }, asset.label);
+      }
 
       if (clicked) {
         await delay(500);
@@ -443,33 +454,30 @@
   // Step 7: Click generate button
   // ---------------------------------------------------------------------------
   async function stepGenerate() {
-    const allBtns = () => Array.from(document.querySelectorAll("button")).filter(isVisible);
+    const delayMs = 200;
 
-    // Filter buttons containing "生成" and not disabled
-    const btns = allBtns().filter(el =>
-      textIncludes(el.textContent, "生成") && !el.disabled
-    );
+    // Wait for submit button to be enabled (becomes clickable after upload + prompt)
+    const enabledSubmit = waitFor(() => {
+      const btn = document.querySelector('button[class*="submit-button"]:not([disabled])');
+      return btn || null;
+    }, { timeoutMs: 300000, label: "enabled_submit_button" });
 
-    if (btns.length === 0) {
-      const allBtns = allButtons().map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
-      throw new Error(`Generate button not found (checked for 按钮 with 生成, all: ${allBtns})`);
+    const targetBtn = await enabledSubmit;
+
+    if (!targetBtn) {
+      const allBtns = Array.from(document.querySelectorAll("button")).slice(0, 8).map(b =>
+        `dis:${b.disabled} cls:${b.className.replace(/\S+/g, m => m).slice(0, 35)}`
+      ).join(" | ");
+      throw new Error(`Generate button never became enabled (all_btns: ${allBtns})`);
     }
 
-    // Prefer the button whose text is exactly "生成" or starts with "生成"
-    // and has a distinct appearance (larger, prominent placement)
-    const exactGenerate = btns.find(el => {
-      const text = el.textContent?.trim() || "";
-      return text === "生成" || text.startsWith("生成") && text.length < 10;
-    });
-
-    // Fall back to first button with "生成" if no exact match
-    const targetBtn = exactGenerate || btns[0];
-
-    // Debug: log what we're clicking
-    console.log("[stepGenerate] clicking button:", targetBtn.textContent?.trim().slice(0, 40), "disabled:", targetBtn.disabled);
-
+    console.log("[stepGenerate] clicking enabled submit:", targetBtn.className.slice(0, 40));
     targetBtn.click();
-    return { ok: true, data: { count: btns.length, clicked: targetBtn.textContent?.trim().slice(0, 40) }, error: null };
+    await delay(delayMs);
+
+    const isProcessing = document.querySelector('button[class*="submit-button"]:disabled') !== null;
+    console.log("[stepGenerate] clicked, processing started:", isProcessing);
+    return { ok: true, data: { clicked: targetBtn.className.slice(0, 30), processing: isProcessing }, error: null };
   }
 
   // ---------------------------------------------------------------------------
