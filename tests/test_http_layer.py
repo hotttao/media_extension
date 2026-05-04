@@ -141,6 +141,48 @@ class Test_upload_file_multipart:
 
 
 class Test_save_media_ai_generated_image:
+    def test_first_frame_image_save(self, tmp_path: pathlib.Path) -> None:
+        """GPT first-frame-image save flow with real product/productId from runs/.
+
+        API: POST /api/products/{id}/first-frame
+        Body: {"styleImageId": "...", "sceneId": "...", "imageUrl": "...", "generationPath": "gpt"}
+        Expected: HTTP 200 with {"firstFrameUrl": "...", "firstFrameId": "..."}
+        """
+        cookie = _get_cookie()
+        png_bytes = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x0a\x00\x00"
+            b"\x00\x0a\x08\x02\x00\x00\x00\x90\x91h6\x00\x00\x00\x19IDAT"
+            b"\x78\x9cc\xfc\xff\xff?\x03)\x00\x00\x00\xff\xff\x03\x00"
+            b"\x08\xfc\x02\xfe\xa7\x9a]\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        img_path = tmp_path / "first_frame.png"
+        img_path.write_bytes(png_bytes)
+
+        job = Job(
+            id="test-first-frame-001",
+            case_file=pathlib.Path("test/task.md"),
+            prompt="test",
+            assets=[],
+            output_dir=tmp_path / "output",
+            media_ai={
+                "baseUrl": MEDIA_AI_BASE_URL,
+                "kind": "first-frame-image",
+                "productId": "3813528280213094793",
+                "styleImageId": "f07aff65-ba21-4e2c-9580-d599417318f8",
+                "sceneId": "d0e56cbd-1ef9-4b71-8ace-c4adb3cc017a",
+                "cookie": cookie,
+            },
+        )
+
+        result = save_media_ai_generated_image(job, img_path)
+        assert result is not None
+        assert result["kind"] == "first-frame-image"
+        assert "uploaded" in result
+        assert "saved" in result
+        # Save response must include firstFrameId and firstFrameUrl
+        assert "firstFrameId" in result["saved"], f"Expected firstFrameId in save result: {result['saved']}"
+        assert "firstFrameUrl" in result["saved"], f"Expected firstFrameUrl in save result: {result['saved']}"
+
     def test_jimeng_image_upload_and_save(self, tmp_path: pathlib.Path) -> None:
         """Upload flow: upload succeeds. Save may fail with 4xx if product doesn't exist."""
         cookie = _get_cookie()
