@@ -8,7 +8,7 @@ from local_bridge.api.schemas import (
 from local_bridge.domain.models import sha256_bytes, write_json
 from local_bridge.domain.services import save_media_ai_generated_image, save_media_ai_generated_video
 
-router = APIRouter(prefix="/v1", tags=["job"])
+router = APIRouter(tags=["job"])
 
 
 @router.post("/job/{job_id}/result", response_model=ResultSubmitResponse, responses={404: {"model": dict}})

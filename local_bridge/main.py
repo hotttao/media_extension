@@ -7,6 +7,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from local_bridge.api.routers import (
     jobs_router,
@@ -53,6 +54,11 @@ def create_app(store: JobStore | None = None) -> FastAPI:
     # Attach state
     app.state.store = store
     app.state.media_ai_client = MediaAIClient()
+
+    # Static file serving for job manager UI
+    static_path = Path(__file__).parent / "static"
+    if static_path.exists():
+        app.mount("/manage", StaticFiles(directory=str(static_path), html=True), name="manage")
 
     # Mount routers
     app.include_router(jobs_router, prefix="/v1", tags=["jobs"])

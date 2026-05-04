@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Request, Header
 from local_bridge.api.schemas import ClaimResponse
 
-router = APIRouter(prefix="/v1", tags=["job"])
+router = APIRouter(tags=["job"])
 
 
 @router.get("/job/claim", response_model=ClaimResponse)

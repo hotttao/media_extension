@@ -5,7 +5,7 @@ from local_bridge.api.schemas import (
     SingleJobCreatedResponse,
 )
 
-router = APIRouter(prefix="/v1", tags=["single"])
+router = APIRouter(tags=["single"])
 
 
 @router.post("/single/style-image", response_model=SingleJobCreatedResponse, responses={400: {"model": dict}, 404: {"model": dict}})

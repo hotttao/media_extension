@@ -7,7 +7,7 @@ from local_bridge.api.schemas import (
 )
 from local_bridge.domain.services import resolve_media_url, extension_from_url, slugify
 
-router = APIRouter(prefix="/v1", tags=["single"])
+router = APIRouter(tags=["single"])
 
 MEDIA_AI_BASE_URL = "http://localhost:3000"
 

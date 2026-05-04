@@ -8,12 +8,14 @@ from local_bridge.api.schemas import (
 )
 from local_bridge.infrastructure.persistence import JobStore
 
-router = APIRouter(prefix="/v1", tags=["jobs"])
+router = APIRouter(tags=["jobs"])
 
 
 @router.get("/state", response_model=StateResponse)
 def get_state(request: Request):
-    store: JobStore = request.app.state.store
+    store: JobStore | None = getattr(request.app.state, "store", None)
+    if store is None:
+        return StateResponse(jobs=[])
     return StateResponse(**store.summary())
 
 

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>local_bridge — Job Manager</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1117;
+    color: #e6e8ed;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  h1 .badge {
+    font-size: 11px;
+    font-weight: 500;
+    background: #238636;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  button {
+    padding: 7px 16px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #21262d;
+    color: #e6e8ed;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  button:hover { background: #30363d; }
+  button:disabled { opacity: 0.4; cursor: default; }
+
+  button.danger { border-color: #f85149; color: #f85149; }
+  button.danger:hover { background: #f8514922; }
+
+  button.success { border-color: #3fb950; color: #3fb950; }
+  button.success:hover { background: #3fb95022; }
+
+  select {
+    padding: 7px 12px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #21262d;
+    color: #e6e8ed;
+    font-size: 13px;
+  }
+
+  .status-bar {
+    font-size: 12px;
+    color: #8b949e;
+    margin-left: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid #30363d;
+    color: #8b949e;
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  td {
+    padding: 12px 12px;
+    border-bottom: 1px solid #21262d;
+    vertical-align: middle;
+  }
+
+  tr:hover td { background: #161b22; }
+
+  .job-id {
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 12px;
+    color: #79c0ff;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .status.pending   { background: #21262d; color: #8b949e; }
+  .status.running   { background: #1f6feb33; color: #58a6ff; }
+  .status.completed { background: #23863633; color: #3fb950; }
+  .status.failed    { background: #f8514933; color: #f85149; }
+  .status.canceled  { background: #8b949e33; color: #8b949e; }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .status.running .status-dot {
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .case-file {
+    color: #8b949e;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: monospace;
+    font-size: 11px;
+  }
+
+  .time { color: #8b949e; font-size: 12px; white-space: nowrap; }
+  .reason { color: #f85149; font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .actions { display: flex; gap: 6px; }
+
+  .progress-msg {
+    font-size: 11px;
+    color: #8b949e;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #8b949e;
+    font-size: 14px;
+  }
+
+  .error-banner {
+    background: #f8514933;
+    border: 1px solid #f8514966;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #f85149;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid #30363d;
+    border-top-color: #58a6ff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: #0f1117cc;
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.active { display: flex; }
+
+  .modal {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 24px;
+    width: 420px;
+    max-width: 90vw;
+  }
+
+  .modal h2 { font-size: 16px; margin-bottom: 16px; color: #fff; }
+
+  .modal-body { font-size: 13px; color: #8b949e; margin-bottom: 20px; line-height: 1.6; }
+
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+  .log-entry {
+    font-size: 11px;
+    font-family: monospace;
+    padding: 2px 0;
+    color: #8b949e;
+  }
+
+  .log-entry .ts { color: #484f58; margin-right: 8px; }
+</style>
+</head>
+<body>
+
+<h1>
+  local_bridge
+  <span class="badge" id="job-count">—</span>
+  <span id="server-status" style="font-size:12px;color:#8b949e;margin-left:4px;"></span>
+</h1>
+
+<div class="toolbar">
+  <button onclick="fetchJobs()">↻ Refresh</button>
+  <select id="filter-status">
+    <option value="">All statuses</option>
+    <option value="pending">Pending</option>
+    <option value="running">Running</option>
+    <option value="completed">Completed</option>
+    <option value="failed">Failed</option>
+    <option value="canceled">Canceled</option>
+  </select>
+  <span class="status-bar" id="status-bar">Loading...</span>
+</div>
+
+<div id="error-banner" class="error-banner" style="display:none;"></div>
+
+<div id="jobs-table"></div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 id="modal-title">Confirm</h2>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button id="modal-confirm-btn" class="danger" onclick="confirmModal()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let pendingAction = null;
+
+function el(sel) { return document.querySelector(sel); }
+function els(sel) { return document.querySelectorAll(sel); }
+
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function clearError() {
+  el('#error-banner').style.display = 'none';
+}
+
+function setStatusBar(msg) {
+  el('#status-bar').textContent = msg;
+}
+
+function showModal(title, body, onConfirm) {
+  el('#modal-title').textContent = title;
+  el('#modal-body').textContent = body;
+  el('#modal-confirm-btn').onclick = onConfirm;
+  el('#modal').classList.add('active');
+}
+
+function closeModal() {
+  el('#modal').classList.remove('active');
+  pendingAction = null;
+}
+
+function confirmModal() {
+  if (pendingAction) pendingAction();
+  closeModal();
+}
+
+function jobStatusHTML(status) {
+  return `<span class="status ${status}"><span class="status-dot"></span>${status}</span>`;
+}
+
+function timeAgo(iso) {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  return Math.floor(diff / 86400000) + 'd ago';
+}
+
+function actionBtn(label, onclick, cls) {
+  return `<button class="${cls || ''}" onclick="${onclick}">${label}</button>`;
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(API + path, opts);
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`${r.status} ${r.statusText}: ${text}`);
+  }
+  return r.json();
+}
+
+async function fetchJobs() {
+  clearError();
+  el('#status-bar').innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const data = await api('GET', '/v1/state');
+    renderJobs(data.jobs || []);
+    el('#server-status').textContent = '';
+    setStatusBar('');
+  } catch (e) {
+    showError('Failed to fetch /v1/state: ' + e.message);
+    setStatusBar('Error loading jobs');
+  }
+}
+
+function renderJobs(jobs) {
+  el('#job-count').textContent = jobs.length + ' job' + (jobs.length !== 1 ? 's' : '');
+
+  if (jobs.length === 0) {
+    el('#jobs-table').innerHTML = '<div class="empty">No jobs in queue.</div>';
+    return;
+  }
+
+  const filter = el('#filter-status').value;
+  const filtered = filter ? jobs.filter(j => j.status === filter) : jobs;
+
+  const rows = filtered.map((job, i) => {
+    const latest = job.latestProgress;
+    const latestMsg = latest ? latest.message : '';
+    const latestDetail = latest && latest.details ? JSON.stringify(latest.details).slice(0, 60) : '';
+
+    const canRequeue = job.status === 'failed' || job.status === 'canceled';
+    const canCancel = job.status === 'pending';
+
+    return `<tr data-job-id="${job.id}">
+      <td><span class="job-id" title="${job.id}">${job.id}</span></td>
+      <td>${jobStatusHTML(job.status)}</td>
+      <td><span class="case-file" title="${job.caseFile}">${job.caseFile.split(/[/\\]/).slice(-2).join('/')}</span></td>
+      <td><span class="time" title="${job.createdAt || ''}">${job.createdAt ? timeAgo(job.createdAt) : '—'}</span></td>
+      <td><span class="time" title="${job.claimedAt || ''}">${job.claimedAt ? timeAgo(job.claimedAt) : '—'}</span></td>
+      <td>
+        ${latestMsg
+          ? `<div class="progress-msg" title="${latestMsg}${latestDetail ? ' ' + latestDetail : ''}">${latestMsg}</div>`
+          : '<span style="color:#484f58;font-size:12px;">—</span>'}
+      </td>
+      <td>${job.failureReason ? `<span class="reason" title="${job.failureReason}">${job.failureReason}</span>` : '—'}</td>
+      <td>
+        <div class="actions">
+          ${canRequeue ? actionBtn('↻ Requeue', `requeueJob('${job.id}')`, 'success') : ''}
+          ${canCancel ? actionBtn('✕ Cancel', `confirmCancel('${job.id}')`, 'danger') : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  el('#jobs-table').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Job ID</th>
+          <th>Status</th>
+          <th>Case File</th>
+          <th>Created</th>
+          <th>Claimed</th>
+          <th>Latest Progress</th>
+          <th>Failure</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function requeueJob(jobId) {
+  setStatusBar(`Requeueing ${jobId}...`);
+  try {
+    const r = await api('POST', `/v1/job/${encodeURIComponent(jobId)}/requeue`);
+    if (r.ok) {
+      setStatusBar(`Requeued ${jobId}`);
+      fetchJobs();
+    } else {
+      showError(`Requeue failed: ${r.error || JSON.stringify(r)}`);
+      setStatusBar('Requeue failed');
+    }
+  } catch (e) {
+    showError('Requeue error: ' + e.message);
+    setStatusBar('Requeue error');
+  }
+}
+
+function confirmCancel(jobId) {
+  showModal(
+    'Cancel Job',
+    `Cancel job "${jobId}"? This cannot be undone.`,
+    async () => {
+      setStatusBar(`Canceling ${jobId}...`);
+      try {
+        const r = await api('POST', `/v1/job/${encodeURIComponent(jobId)}/cancel`);
+        if (r.ok) {
+          setStatusBar(`Canceled ${jobId}`);
+          fetchJobs();
+        } else {
+          showError(`Cancel failed: ${r.error || JSON.stringify(r)}`);
+          setStatusBar('Cancel failed');
+        }
+      } catch (e) {
+        showError('Cancel error: ' + e.message);
+        setStatusBar('Cancel error');
+      }
+    }
+  );
+}
+
+async function cancelAllPending() {
+  showModal(
+    'Cancel All Pending',
+    `Cancel all pending jobs? This cannot be undone.`,
+    async () => {
+      setStatusBar('Canceling all pending...');
+      try {
+        const r = await api('POST', '/v1/jobs/cancel');
+        setStatusBar(`Canceled ${r.canceled?.length || 0} job(s)`);
+        fetchJobs();
+      } catch (e) {
+        showError('Cancel all error: ' + e.message);
+        setStatusBar('Error');
+      }
+    }
+  );
+}
+
+// Auto-refresh every 5s
+let autoRefresh = setInterval(fetchJobs, 5000);
+
+// Filter change
+el('#filter-status').addEventListener('change', () => {
+  // Re-render with current jobs (already filtered in renderJobs)
+  // Jobs will be re-fetched on next auto-refresh
+});
+
+// Initial fetch
+fetchJobs();
+</script>
+
+</body>
+</html>

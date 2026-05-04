@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from local_bridge.api.schemas import CancelResponse
 
-router = APIRouter(prefix="/v1", tags=["job"])
+router = APIRouter(tags=["job"])
 
 
 @router.post("/job/{job_id}/cancel", response_model=CancelResponse, responses={404: {"model": dict}, 409: {"model": dict}})

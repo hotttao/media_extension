@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Request
 from local_bridge.api.schemas import CancelAllResponse
 
-router = APIRouter(prefix="/v1", tags=["jobs"])
+router = APIRouter(tags=["jobs"])
 
 
 @router.post("/jobs/cancel", response_model=CancelAllResponse)

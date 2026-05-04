@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Request
 from local_bridge.api.schemas import FailSubmitRequest, SuccessResponse
 from local_bridge.domain.models import write_json
 
-router = APIRouter(prefix="/v1", tags=["job"])
+router = APIRouter(tags=["job"])
 
 
 @router.post("/job/{job_id}/fail", response_model=SuccessResponse, responses={404: {"model": dict}})

@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from local_bridge.api.schemas import RequeueResponse
 
-router = APIRouter(prefix="/v1", tags=["job"])
+router = APIRouter(tags=["job"])
 
 
 @router.post("/job/{job_id}/requeue", response_model=RequeueResponse, responses={404: {"model": dict}})

@@ -6,7 +6,7 @@ from local_bridge.api.schemas import (
 )
 from local_bridge.infrastructure.media_ai_client import MediaAIClient
 
-router = APIRouter(prefix="/v1", tags=["single"])
+router = APIRouter(tags=["single"])
 
 MEDIA_AI_BASE_URL = "http://localhost:3000"
 
