@@ -65,32 +65,13 @@ def can_reach_bridge(bridge_url: str, timeout: int = 3) -> bool:
 
 
 def ensure_bridge_running(args: Any) -> Any:
-    """Start local_bridge if not running. Returns None. Raises RuntimeError on failure."""
+    """Raise RuntimeError if bridge is not reachable. Does not auto-start."""
     if can_reach_bridge(args.bridge_url):
         return None
-    if getattr(args, "no_auto_bridge", False):
-        raise RuntimeError(
-            f"local_bridge is not running at {args.bridge_url}. "
-            "Start it with: python local_bridge/server.py serve"
-        )
-    log_dir = pathlib.Path(args.output_root)
-    log_dir.mkdir(exist_ok=True)
-    log_path = log_dir / "auto-local-bridge.log"
-    log_file = log_path.open("a", encoding="utf-8")
-    proc = subprocess.Popen(
-        [sys.executable, "local_bridge/server.py", "serve", "--output-root", "runs"],
-        cwd=pathlib.Path.cwd(),
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
+    raise RuntimeError(
+        f"local_bridge is not running at {args.bridge_url}. "
+        "Start it with: uv run python -m local_bridge serve"
     )
-    for _ in range(20):
-        if proc.poll() is not None:
-            raise RuntimeError(f"Failed to start local bridge. See {log_path}.")
-        if can_reach_bridge(args.bridge_url):
-            print(f"[BRIDGE] started local queue bridge at {args.bridge_url}. Log: {log_path}")
-            return proc
-        time.sleep(0.5)
-    raise RuntimeError(f"Timed out waiting for local bridge to start. See {log_path}.")
 
 
 # ---------------------------------------------------------------------------
