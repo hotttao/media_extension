@@ -118,7 +118,15 @@
       "Bash(PYTHONPATH=. uv run python -m scripts.submit_jimeng_image --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8 --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --dry-run)",
       "Bash(PYTHONPATH=. uv run python -m scripts.submit_jimeng_image --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8 --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --no-auto-bridge)",
       "Bash(PYTHONPATH=. uv run python -m scripts.submit_jimeng_image --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8 --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c)",
-      "Bash(PYTHONPATH=. uv run python -m scripts.submit_jimeng_image --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8 --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --no-wait)"
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_jimeng_image --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8 --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c --no-wait)",
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_media_ai_model_images --help)",
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_media_ai_model_images --product-id 3813528280213094793 --ip-id 981cd79c-5973-429a-8edf-dff3eda45014 --dry-run)",
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_media_ai_model_images --product-id 3813528280213094793 --ip-id 981cd79c-5973-429a-8edf-dff3eda45014 --no-wait)",
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_media_ai_model_images --product-id 3756942865549361640 --ip-id 981cd79c-5973-429a-8edf-dff3eda45014 --dry-run)",
+      "Bash(PYTHONPATH=. uv run python -m scripts.submit_media_ai_model_images --product-id 3756942865549361640 --ip-id 981cd79c-5973-429a-8edf-dff3eda45014 --no-wait)",
+      "Bash(tasklist)",
+      "Bash(tasklist /FI 'PID eq 41396')",
+      "Bash(wmic process:*)"
     ]
   }
 }
