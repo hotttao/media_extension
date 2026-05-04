@@ -124,11 +124,29 @@ class JobStore:
                         "failureReason": job.failure_reason,
                         "outputDir": str(job.output_dir),
                         "latestProgress": job.progress[-1] if job.progress else None,
+                        "progress": list(job.progress),
+                        "assets": [
+                            {
+                                "index": i,
+                                "label": a["label"],
+                                "name": a["name"],
+                                "mimeType": a["mimeType"],
+                            }
+                            for i, a in enumerate(job.assets)
+                        ],
                         "mediaAi": public_media_ai(job.media_ai),
                     }
                     for job in self.jobs
                 ]
             }
+
+    def delete(self, job_id: str) -> Job:
+        with self.lock:
+            job = self._get_job_or_raise(job_id)
+            if job.status == "running":
+                raise RuntimeError("Running jobs cannot be deleted.")
+            self.jobs.remove(job)
+            return job
 
     def _get_job_or_raise(self, job_id: str) -> Job:
         for job in self.jobs:

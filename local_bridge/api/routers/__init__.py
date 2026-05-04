@@ -7,6 +7,7 @@ from local_bridge.api.routers.job_fail import router as job_fail_router
 from local_bridge.api.routers.job_requeue import router as job_requeue_router
 from local_bridge.api.routers.job_cancel import router as job_cancel_router
 from local_bridge.api.routers.jobs_cancel import router as jobs_cancel_router
+from local_bridge.api.routers.job_delete import router as job_delete_router
 from local_bridge.api.routers.single_model_image import router as single_model_image_router
 from local_bridge.api.routers.single_style_image import router as single_style_image_router
 from local_bridge.api.routers.single_first_frame import router as single_first_frame_router
@@ -21,6 +22,7 @@ __all__ = [
     "job_requeue_router",
     "job_cancel_router",
     "jobs_cancel_router",
+    "job_delete_router",
     "single_model_image_router",
     "single_style_image_router",
     "single_first_frame_router",
