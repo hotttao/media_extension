@@ -205,6 +205,7 @@ def main() -> int:
                 assets_dir = input_dir / "assets"
                 task_dir.mkdir(parents=True, exist_ok=True)
                 input_dir.mkdir(parents=True, exist_ok=True)
+                assets_dir.mkdir(parents=True, exist_ok=True)
 
                 # Download 3 reference images
                 ip_media_url = resolve_media_url(client.media_base_url, str(ip_full_body_url))
