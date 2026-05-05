@@ -234,7 +234,7 @@ async function runJimengImageJobHandler(job, serverUrl) {
   }
 }
 
-// Jimeng video handler (inline)
+// Jimeng video handler (uses step functions S1V-S9V)
 async function runJimengVideoJobHandler(job, serverUrl) {
   const logs = [];
   const record = async (message, details = null) => {
@@ -246,127 +246,88 @@ async function runJimengVideoJobHandler(job, serverUrl) {
     await sendProgress(serverUrl, message, at, details);
   };
 
-  const fetchAssetAsFileVideo = async (asset) => {
-    const response = await bridgeFetch({ url: asset.url, responseType: "blobBase64" });
-    const binary = atob(response.base64Data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const mimeType = asset.mimeType || response.mimeType || "application/octet-stream";
-    return new File([bytes], asset.name, { type: mimeType });
+  const snapshotDOM = () => {
+    try {
+      const comboboxes = Array.from(document.querySelectorAll('[role="combobox"]')).map(el => el.textContent.trim().slice(0, 60));
+      const buttons = Array.from(document.querySelectorAll('button')).filter(el => el.getBoundingClientRect().width > 0).map(el => el.textContent.trim().slice(0, 40));
+      const fileInputs = Array.from(document.querySelectorAll('input[type="file"]')).length;
+      return JSON.stringify({ comboboxes, buttons, fileInputs, url: window.location.href.slice(0, 80) });
+    } catch { return "{}"; }
   };
 
-  const uploadFirstFrameImage = async (asset) => {
-    const fileInput = await waitFor(() => Array.from(document.querySelectorAll("input[type='file']")).find(input => isVisible(input) || input.offsetParent !== null), { timeoutMs: 30000, label: "file input for image upload" });
-    if (!fileInput) throw new Error("File input not found for image upload");
-    const file = await fetchAssetAsFileVideo(asset);
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(file);
-    fileInput.files = dataTransfer.files;
-    fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-    fileInput.dispatchEvent(new Event("input", { bubbles: true }));
-    await delay(2000);
-  };
-
-  const fillInput = (input, text) => {
-    input.focus();
-    const currentValue = input.value || "";
-    if (currentValue === text) return;
-    if ("value" in input) {
-      input.value = "";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.value = text;
-      input.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    } else {
-      const inserted = document.execCommand("insertText", false, text);
-      if (!inserted) {
-        input.textContent = text;
-        input.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
-      }
-    }
-    input.blur();
-  };
-
-  const waitForVideoResult = async (timeoutMs) => {
-    const deadline = Date.now() + timeoutMs;
-    let stableSince = 0;
-    let lastVideoSrc = "";
-    while (Date.now() < deadline) {
-      const videoElement = document.querySelector("video");
-      if (videoElement && isVisible(videoElement) && videoElement.src && videoElement.src !== lastVideoSrc) {
-        lastVideoSrc = videoElement.src;
-        if (!stableSince) stableSince = Date.now();
-        if (Date.now() - stableSince > 8000) return { sourceType: "videoElement", url: videoElement.src, element: videoElement };
-      }
-      const downloadLink = Array.from(document.querySelectorAll("a[href]")).find(a => a.href && (a.href.includes(".mp4") || a.href.includes(".webm")));
-      if (downloadLink && downloadLink.href !== lastVideoSrc) {
-        lastVideoSrc = downloadLink.href;
-        if (!stableSince) stableSince = Date.now();
-        if (Date.now() - stableSince > 8000) return { sourceType: "downloadLink", url: downloadLink.href, element: downloadLink };
-      }
-      await delay(2000);
-    }
-    throw new Error("Timed out while waiting for video result");
-  };
+  const firstFrameAsset = job.assets?.find(a => a.label === "firstFrame") || job.assets?.[0];
+  const lastFrameAsset = job.assets?.find(a => a.label === "lastFrame");
 
   try {
     await record(`Preparing ${job.id}`);
 
-    if (window.location.href !== job.targetUrl) {
-      await record("Navigating to Jimeng video page");
-      window.location.href = job.targetUrl;
-      await waitFor(() => window.location.href.includes("jimeng.jianying.com"), { timeoutMs: 30000, label: "page navigation" });
-      await delay(2000);
+    await record("S1V: Navigating to video page");
+    {
+      const r = await window.stepVideoNav(job.targetUrl);
+      if (!r.ok) throw new Error(`[S1V] ${r.error} | DOM: ${snapshotDOM()}`);
     }
 
-    await record("Clicking 视频生成 tab");
-    const videoTab = await waitFor(() => Array.from(document.querySelectorAll("div, span, button")).find(el => isVisible(el) && el.innerText && el.innerText.includes("视频生成")), { timeoutMs: 30000, label: "视频生成 tab" });
-    if (videoTab) { videoTab.click(); await delay(1000); }
-
-    await record("Selecting Seedance1.0 首尾帧 model");
-    const modelOption = await waitFor(() => Array.from(document.querySelectorAll("div, span, button")).find(el => isVisible(el) && el.innerText && el.innerText.includes("Seedance1.0 首尾帧")), { timeoutMs: 30000, label: "Seedance1.0 model option" });
-    if (modelOption) { modelOption.click(); await delay(1000); }
-
-    await record("Uploading first frame image");
-    const firstFrameAsset = job.assets?.find(a => a.label === "firstFrame") || (job.assets?.length > 0 ? job.assets[0] : null);
-    if (firstFrameAsset) await uploadFirstFrameImage(firstFrameAsset);
-
-    await record("Filling movement description");
-    const movementText = job.movement || job.movementId || job.prompt || "";
-    const movementInput = await waitFor(() => Array.from(document.querySelectorAll("textarea, input")).find(el => isVisible(el) && (el.placeholder?.includes("运动") || el.placeholder?.includes("movement"))), { timeoutMs: 30000, label: "movement input" });
-    if (movementInput) { fillInput(movementInput, movementText); await delay(500); }
-
-    await record("Filling prompt text");
-    const promptInput = await waitFor(() => Array.from(document.querySelectorAll("textarea")).find(el => isVisible(el) && (el.placeholder?.includes("描述") || el.placeholder?.includes("prompt"))), { timeoutMs: 30000, label: "prompt input" });
-    if (promptInput) { fillInput(promptInput, job.prompt || ""); await delay(500); }
-
-    await record("Clicking generate button");
-    const generateButton = await waitFor(() => Array.from(document.querySelectorAll("button")).find(el => isVisible(el) && !el.disabled && (el.innerText?.includes("生成") || el.innerText?.includes("生成视频"))), { timeoutMs: 30000, label: "generate button" });
-    if (!generateButton) throw new Error("Generate button not found");
-    generateButton.click();
-
-    await record("Waiting for video result");
-    const videoResult = await waitForVideoResult(job.timeoutSeconds ? job.timeoutSeconds * 1000 : 600000);
-    await record(`Found video result`, { sourceType: videoResult.sourceType, url: videoResult.url });
-
-    await record("Serializing video");
-    let blob, mimeType = "video/mp4";
-    if (videoResult.sourceType === "videoElement") {
-      const response = await fetch(videoResult.url, { credentials: "include" });
-      if (!response.ok) throw new Error(`Failed to fetch video: ${response.status}`);
-      blob = await response.blob();
-      mimeType = blob.type || "video/mp4";
-    } else {
-      const response = await fetch(videoResult.url, { credentials: "include" });
-      if (!response.ok) throw new Error(`Failed to fetch video from download link: ${response.status}`);
-      blob = await response.blob();
-      mimeType = blob.type || "video/mp4";
+    await record("S2V: Confirming video tab");
+    {
+      const r = await window.stepVideoTab();
+      if (!r.ok) throw new Error(`[S2V] ${r.error} | DOM: ${snapshotDOM()}`);
     }
+
+    await record("S3V: Selecting Seedance model");
+    {
+      const r = await window.stepVideoModel();
+      if (!r.ok) throw new Error(`[S3V] ${r.error} | DOM: ${snapshotDOM()}`);
+    }
+
+    await record("S4V: Selecting aspect ratio");
+    {
+      const r = await window.stepVideoRatio(job);
+      if (!r.ok) throw new Error(`[S4V] ${r.error} | DOM: ${snapshotDOM()}`);
+    }
+
+    await record("S5V: Uploading first frame");
+    if (firstFrameAsset) {
+      const r = await window.stepVideoUploadFirstFrame(firstFrameAsset);
+      if (!r.ok) throw new Error(`[S5V] ${r.error} | DOM: ${snapshotDOM()}`);
+    }
+
+    await record("S6V: Uploading last frame (optional)");
+    if (lastFrameAsset) {
+      const r = await window.stepVideoUploadLastFrame(lastFrameAsset);
+      if (!r.ok) throw new Error(`[S6V] ${r.error} | DOM: ${snapshotDOM()}`);
+    }
+
+    await record("S7V: Filling prompt and movement description");
+    {
+      const r = await window.stepVideoPrompt(job);
+      if (!r.ok) throw new Error(`[S7V] ${r.error} | DOM: ${snapshotDOM()}`);
+    }
+
+    await record("S8V: Clicking generate button");
+    {
+      const r = await window.stepVideoGenerate();
+      if (!r.ok) throw new Error(`[S8V] ${r.error} | DOM: ${snapshotDOM()}`);
+    }
+
+    await record("S9V: Waiting for video");
+    const waitResult = await window.stepVideoWait(job);
+    if (!waitResult.ok) throw new Error(`[S9V] ${waitResult.error} | DOM: ${snapshotDOM()}`);
+
+    const { videoUrl, sourceType } = waitResult.data;
+    await record(`Found video result`, { sourceType, url: videoUrl });
+
+    await record("Downloading video via bridgeFetch");
+    const fetchResp = await bridgeFetch({ url: videoUrl, responseType: "blobBase64" });
+    const binaryRaw = atob(fetchResp.base64Data);
+    const bytes = new Uint8Array(binaryRaw.length);
+    for (let i = 0; i < binaryRaw.length; i++) bytes[i] = binaryRaw.charCodeAt(i);
+    const blob = new Blob([bytes], { type: fetchResp.mimeType || "video/mp4" });
+    const mimeType = blob.type || "video/mp4";
     const extension = mimeType.includes("webm") ? ".webm" : ".mp4";
     const base64Data = await blobToBase64(blob);
 
     await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/result`, {
-      videos: [{ filename: `result-001${extension}`, mimeType, base64Data, sourceUrl: videoResult.url }],
+      videos: [{ filename: `result-001${extension}`, mimeType, base64Data, sourceUrl: videoUrl }],
       logs,
     });
 
@@ -376,7 +337,7 @@ async function runJimengVideoJobHandler(job, serverUrl) {
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     logs.push({ at: new Date().toISOString(), message: `Failed: ${reason}` });
-    try { await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/fail`, { reason, logs }); } catch (_postError) { /* Ignore */ }
+    try { await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/fail`, { reason, logs }); } catch (_postError) { /* ignore */ }
     controllerState.lastError = reason;
     controllerState.lastMessage = `Failed ${job.id}`;
     await chrome.runtime.sendMessage({ type: "content:failed", jobId: job.id, reason, state: { ...controllerState } });
@@ -388,7 +349,11 @@ async function runJob(job, serverUrl) {
   if (platform === "gpt") {
     await runGptJobHandler(job, serverUrl);
   } else if (platform === "jimeng") {
-    await runJimengImageJobHandler(job, serverUrl);
+    if (job.targetUrl && job.targetUrl.includes("type=video")) {
+      await runJimengVideoJobHandler(job, serverUrl);
+    } else {
+      await runJimengImageJobHandler(job, serverUrl);
+    }
   } else {
     throw new Error(`Unknown platform: ${platform}`);
   }
