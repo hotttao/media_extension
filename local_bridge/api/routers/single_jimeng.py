@@ -218,6 +218,7 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
 
     sidecar: dict = {
         "kind": "video",
+        "platform": "jimeng",
         "baseUrl": client.base_url,
         "productId": resolved_product_id,
         "ipId": resolved_ip_id or None,
