@@ -7,7 +7,7 @@ from local_bridge.api.schemas import (
     ResultSubmitResponse,
 )
 from local_bridge.domain.models import sha256_bytes, write_json
-from local_bridge.domain.services import save_media_ai_generated_image, save_media_ai_generated_video
+from local_bridge.domain.services import save_media_ai_generated_image, save_media_ai_generated_images_batch, save_media_ai_generated_video
 
 router = APIRouter(tags=["job"])
 
@@ -32,38 +32,83 @@ def submit_result(job_id: str, body: ResultSubmitRequest, request: Request):
     media_ai_results: list[dict] = []
     asset_hashes = {asset["sha256"] for asset in job.assets}
 
-    # Process images
-    for index, image in enumerate(images, start=1):
-        base64_data = image.base64Data or ""
-        if not base64_data:
-            continue
-        try:
-            binary = base64.b64decode(base64_data)
-        except Exception:
-            continue
-        image_hash = sha256_bytes(binary)
-        if image_hash in asset_hashes:
-            skipped_files.append({
-                "filename": image.filename or f"result-{index:02d}.png",
-                "reason": "matches_input_asset",
-                "sha256": image_hash,
-                "sourceUrl": image.sourceUrl,
-            })
-            continue
-        original_name = image.filename or f"result-{index:02d}.png"
-        suffix = pathlib.Path(original_name).suffix or ".png"
-        output_name = f"result-{len(saved_files) + 1:02d}{suffix}"
-        output_path = job.output_dir / output_name
-        output_path.write_bytes(binary)
-        saved_files.append(output_name)
-        if job.media_ai:
+    # Determine if this job should use batch save for images
+    use_batch = (
+        job.media_ai is not None
+        and job.media_ai.get("kind") == "first-frame-image"
+        and job.media_ai.get("platform") == "jimeng"
+    )
+
+    if use_batch:
+        # Jimeng first-frame-image: batch collect all images, then batch save once
+        batch_paths: list[pathlib.Path] = []
+        for index, image in enumerate(images, start=1):
+            base64_data = image.base64Data or ""
+            if not base64_data:
+                continue
             try:
-                result = save_media_ai_generated_image(job, output_path)
+                binary = base64.b64decode(base64_data)
+            except Exception:
+                continue
+            image_hash = sha256_bytes(binary)
+            if image_hash in asset_hashes:
+                skipped_files.append({
+                    "filename": image.filename or f"result-{index:02d}.png",
+                    "reason": "matches_input_asset",
+                    "sha256": image_hash,
+                    "sourceUrl": image.sourceUrl,
+                })
+                continue
+            original_name = image.filename or f"result-{index:02d}.png"
+            suffix = pathlib.Path(original_name).suffix or ".png"
+            output_name = f"result-{len(saved_files) + 1:02d}{suffix}"
+            output_path = job.output_dir / output_name
+            output_path.write_bytes(binary)
+            saved_files.append(output_name)
+            batch_paths.append(output_path)
+
+        # Batch save all images at once
+        if batch_paths:
+            try:
+                result = save_media_ai_generated_images_batch(job, batch_paths)
                 if result:
                     media_ai_results.append(result)
             except Exception as e:
-                logger.exception("[submit_result] save_media_ai_generated_image failed: {error}", error=e)
+                logger.exception("[submit_result] save_media_ai_generated_images_batch failed: {error}", error=e)
                 media_ai_results.append({"error": str(e)})
+    else:
+        # Other image types: process individually
+        for index, image in enumerate(images, start=1):
+            base64_data = image.base64Data or ""
+            if not base64_data:
+                continue
+            try:
+                binary = base64.b64decode(base64_data)
+            except Exception:
+                continue
+            image_hash = sha256_bytes(binary)
+            if image_hash in asset_hashes:
+                skipped_files.append({
+                    "filename": image.filename or f"result-{index:02d}.png",
+                    "reason": "matches_input_asset",
+                    "sha256": image_hash,
+                    "sourceUrl": image.sourceUrl,
+                })
+                continue
+            original_name = image.filename or f"result-{index:02d}.png"
+            suffix = pathlib.Path(original_name).suffix or ".png"
+            output_name = f"result-{len(saved_files) + 1:02d}{suffix}"
+            output_path = job.output_dir / output_name
+            output_path.write_bytes(binary)
+            saved_files.append(output_name)
+            if job.media_ai:
+                try:
+                    result = save_media_ai_generated_image(job, output_path)
+                    if result:
+                        media_ai_results.append(result)
+                except Exception as e:
+                    logger.exception("[submit_result] save_media_ai_generated_image failed: {error}", error=e)
+                    media_ai_results.append({"error": str(e)})
 
     # Process videos
     for index, video in enumerate(videos, start=1):
