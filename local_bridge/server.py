@@ -33,8 +33,11 @@ from local_bridge.media_ai_client import (
     _scene_url,
 )
 from local_bridge.domain.services import (
+    guess_mime_type,
+    request_json,
     save_media_ai_generated_image,
     save_media_ai_generated_video,
+    upload_file_multipart,
 )
 
 
@@ -100,11 +103,6 @@ def sanitize_slug(value: str) -> str:
     lowered = value.lower()
     cleaned = re.sub(r"[^a-z0-9]+", "-", lowered).strip("-")
     return cleaned or "job"
-
-
-def guess_mime_type(path: pathlib.Path) -> str:
-    mime_type, _ = mimetypes.guess_type(path.name)
-    return mime_type or "application/octet-stream"
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -399,80 +397,6 @@ def parse_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     content_length = int(handler.headers.get("Content-Length", "0"))
     raw_body = handler.rfile.read(content_length) if content_length else b"{}"
     return json.loads(raw_body.decode("utf-8"))
-
-
-def request_json(
-    method: str,
-    url: str,
-    *,
-    cookie: str | None,
-    body: dict[str, Any] | None = None,
-    timeout: int = 120,
-) -> Any:
-    headers = {"Accept": "application/json"}
-    data = None
-    if body is not None:
-        headers["Content-Type"] = "application/json"
-        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    if cookie:
-        headers["Cookie"] = cookie
-
-    request = Request(url, data=data, headers=headers, method=method)
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-            return json.loads(raw) if raw else None
-    except HTTPError as error:
-        raw = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"{method} {url} failed with HTTP {error.code}: {raw}") from error
-    except URLError as error:
-        raise RuntimeError(f"{method} {url} failed: {error.reason}") from error
-
-
-def upload_file_multipart(
-    url: str,
-    *,
-    cookie: str | None,
-    file_path: pathlib.Path,
-    sub_dir: str,
-    timeout: int = 120,
-) -> dict[str, Any]:
-    boundary = f"----codex-{uuid.uuid4().hex}"
-    file_bytes = file_path.read_bytes()
-    mime_type = guess_mime_type(file_path)
-    fields = [
-        (
-            f"--{boundary}\r\n"
-            'Content-Disposition: form-data; name="subDir"\r\n\r\n'
-            f"{sub_dir}\r\n"
-        ).encode("utf-8"),
-        (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="file"; filename="{file_path.name}"\r\n'
-            f"Content-Type: {mime_type}\r\n\r\n"
-        ).encode("utf-8"),
-        file_bytes,
-        f"\r\n--{boundary}--\r\n".encode("utf-8"),
-    ]
-    body = b"".join(fields)
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": f"multipart/form-data; boundary={boundary}",
-        "Content-Length": str(len(body)),
-    }
-    if cookie:
-        headers["Cookie"] = cookie
-
-    request = Request(url, data=body, headers=headers, method="POST")
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-            return json.loads(raw) if raw else {}
-    except HTTPError as error:
-        raw = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"POST {url} failed with HTTP {error.code}: {raw}") from error
-    except URLError as error:
-        raise RuntimeError(f"POST {url} failed: {error.reason}") from error
 
 
 def send_json(handler: BaseHTTPRequestHandler, status: int, payload: Any) -> None:

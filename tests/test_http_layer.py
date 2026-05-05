@@ -15,8 +15,8 @@ import tempfile
 import pytest
 
 from local_bridge.media_ai_client import MediaAIClient
-from local_bridge.server import (
-    Job,
+from local_bridge.server import Job
+from local_bridge.domain.services import (
     request_json,
     save_media_ai_generated_image,
     save_media_ai_generated_video,
