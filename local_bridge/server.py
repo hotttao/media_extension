@@ -512,7 +512,8 @@ def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[s
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
         if not ip_id:
             raise RuntimeError("Media AI jimeng-image sidecar requires ipId.")
-        save_body = {"ipId": ip_id, "imageUrl": image_url, "generationPath": "gpt"}
+        gen_path = job.platform or "jimeng"  # platform maps to generationPath
+        save_body = {"ipId": ip_id, "imageUrl": image_url, "generationPath": gen_path}
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     else:
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
@@ -552,12 +553,13 @@ def save_media_ai_first_frame_upload(job: Job, output_path: pathlib.Path) -> dic
     fields = [
         (f"--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"{output_path.name}\"\r\nContent-Type: {mime_type}\r\n\r\n").encode("utf-8"),
         file_bytes,
-        f"\r\n--{boundary}--\r\n".encode("utf-8"),
+        f"\r\n--{boundary}\r\n".encode("utf-8"),
         (f"--{boundary}\r\nContent-Disposition: form-data; name=\"styleImageId\"\r\n\r\n{style_image_id}\r\n").encode("utf-8"),
         (f"--{boundary}\r\nContent-Disposition: form-data; name=\"sceneId\"\r\n\r\n{scene_id}\r\n").encode("utf-8"),
         (f"--{boundary}\r\nContent-Disposition: form-data; name=\"composition\"\r\n\r\n{composition}\r\n").encode("utf-8"),
         (f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\n{prompt}\r\n").encode("utf-8"),
-        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"generationPath\"\r\n\r\ngpt\r\n").encode("utf-8"),
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"generationPath\"\r\n\r\n" + (job.platform or "gpt") + "\r\n").encode("utf-8"),
+        f"--{boundary}--\r\n".encode("utf-8"),
     ]
     body = b"".join(fields)
     headers = {
