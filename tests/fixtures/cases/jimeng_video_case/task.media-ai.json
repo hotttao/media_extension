@@ -1,5 +1,5 @@
 {
-  "kind": "jimeng-video",
+  "kind": "video",
   "baseUrl": "http://localhost:3000",
   "productId": "prod_002",
   "ipId": "ip_002",

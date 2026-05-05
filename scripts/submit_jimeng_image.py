@@ -241,9 +241,10 @@ def main() -> int:
                 case_path = task_dir / "task.md"
                 case_path.write_text("\n".join(lines), encoding="utf-8")
 
-                # Write .media-ai.json sidecar (kebab-case kind)
+                # Write .media-ai.json sidecar (kind="first-frame-image" per business semantics)
                 sidecar: dict[str, Any] = {
-                    "kind": "jimeng-image",
+                    "kind": "first-frame-image",
+                    "platform": "jimeng",
                     "baseUrl": base_url,
                     "productId": product_id,
                     "productName": product_name,

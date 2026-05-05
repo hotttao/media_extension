@@ -66,7 +66,7 @@ class Test_build_jobs:
         case_dir.mkdir()
         (case_dir / "task.md").write_text("generate something", encoding="utf-8")
         (case_dir / "task.media-ai.json").write_text(
-            '{"kind": "jimeng-image", "productId": "p1", "ipId": "i1"}',
+            '{"kind": "first-frame-image", "platform": "jimeng", "productId": "p1", "ipId": "i1"}',
             encoding="utf-8",
         )
 
@@ -83,7 +83,7 @@ class Test_build_jobs:
             d = tmp_path / f"case{i}"
             d.mkdir()
             (d / "task.md").write_text(f"prompt {i}", encoding="utf-8")
-            (d / "task.media-ai.json").write_text('{"kind": "jimeng-image", "productId": "p", "ipId": "i"}', encoding="utf-8")
+            (d / "task.media-ai.json").write_text('{"kind": "first-frame-image", "platform": "jimeng", "productId": "p", "ipId": "i"}', encoding="utf-8")
 
         jobs = build_jobs([tmp_path / f"case{i}/task.md" for i in range(3)], tmp_path / "output")
         assert len(jobs) == 3
@@ -104,7 +104,7 @@ class Test_build_jobs:
         case_dir.mkdir()
         (case_dir / "task.md").write_text("video prompt", encoding="utf-8")
         (case_dir / "task.media-ai.json").write_text(
-            '{"kind": "jimeng-video", "productId": "p", "ipId": "i", "firstFrameId": "ff"}',
+            '{"kind": "video", "productId": "p", "ipId": "i", "firstFrameId": "ff"}',
             encoding="utf-8",
         )
 
@@ -136,7 +136,7 @@ class Test_build_jobs:
         case_dir.mkdir()
         (case_dir / "task.md").write_text("test", encoding="utf-8")
         (case_dir / "task.media-ai.json").write_text(
-            '{"kind": "jimeng-image", "productId": "p", "ipId": "i", "styleImageId": "s1"}',
+            '{"kind": "first-frame-image", "platform": "jimeng", "productId": "p", "ipId": "i", "styleImageId": "s1"}',
             encoding="utf-8",
         )
 

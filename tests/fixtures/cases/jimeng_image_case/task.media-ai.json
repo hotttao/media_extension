@@ -1,5 +1,6 @@
 {
-  "kind": "jimeng-image",
+  "kind": "first-frame-image",
+  "platform": "jimeng",
   "baseUrl": "http://localhost:3000",
   "productId": "prod_001",
   "productName": "Test Product",

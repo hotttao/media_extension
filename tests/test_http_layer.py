@@ -203,7 +203,8 @@ class Test_save_media_ai_generated_image:
             output_dir=tmp_path / "output",
             media_ai={
                 "baseUrl": MEDIA_AI_BASE_URL,
-                "kind": "jimeng-image",
+                "kind": "first-frame-image",
+                "platform": "jimeng",
                 "productId": "prod_test_001",
                 "ipId": "ip_test_001",
                 "cookie": cookie,
@@ -213,7 +214,7 @@ class Test_save_media_ai_generated_image:
         try:
             result = save_media_ai_generated_image(job, img_path)
             assert result is not None
-            assert result["kind"] == "jimeng-image"
+            assert result["kind"] == "first-frame-image"
             assert "uploaded" in result
             assert "saved" in result
         except RuntimeError as e:

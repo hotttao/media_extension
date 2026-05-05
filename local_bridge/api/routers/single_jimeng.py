@@ -120,7 +120,8 @@ def create_jimeng_image(body: JimengImageCreateRequest, request: Request):
         style_image_url = resolve_media_url(client.media_base_url, str(style_image.get("url") or ""))
 
     sidecar: dict = {
-        "kind": "jimeng-image",
+        "kind": "first-frame-image",
+        "platform": "jimeng",
         "baseUrl": client.base_url,
         "productId": resolved_product_id,
         "productName": product_name,

@@ -165,9 +165,9 @@ def main() -> int:
         case_path = task_dir / "task.md"
         case_path.write_text("\n".join(lines), encoding="utf-8")
 
-        # Write .media-ai.json sidecar (kebab-case kind)
+        # Write .media-ai.json sidecar (kind="video" per CLAUDE.md)
         sidecar: dict[str, Any] = {
-            "kind": "jimeng-video",
+            "kind": "video",
             "baseUrl": base_url,
             "productId": product_id,
             "ipId": ip_id,

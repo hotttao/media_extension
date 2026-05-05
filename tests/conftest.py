@@ -85,9 +85,10 @@ def case_with_images(tmp_path: pathlib.Path, sample_image_png: pathlib.Path) -> 
 
 @pytest.fixture
 def jimeng_image_sidecar() -> dict[str, Any]:
-    """Minimal jimeng-image sidecar dict."""
+    """Minimal jimeng first-frame-image sidecar dict."""
     return {
-        "kind": "jimeng-image",
+        "kind": "first-frame-image",
+        "platform": "jimeng",
         "baseUrl": "http://localhost:3000",
         "productId": "prod_001",
         "productName": "Test Product",

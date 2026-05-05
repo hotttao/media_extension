@@ -83,7 +83,7 @@ class Test_load_media_ai_sidecar:
         case_path = FIXTURE_ROOT / "cases" / "jimeng_image_case" / "task.md"
         sidecar = load_media_ai_sidecar(case_path)
         assert sidecar is not None
-        assert sidecar["kind"] == "jimeng-image"
+        assert sidecar["kind"] == "first-frame-image"
         assert sidecar["productId"] == "prod_001"
         assert sidecar["ipId"] == "ip_001"
         assert sidecar["productId"] == "prod_001"
@@ -107,7 +107,7 @@ class Test_load_media_ai_sidecar:
         case_path = FIXTURE_ROOT / "cases" / "jimeng_video_case" / "task.md"
         sidecar = load_media_ai_sidecar(case_path)
         assert sidecar is not None
-        assert sidecar["kind"] == "jimeng-video"
+        assert sidecar["kind"] == "video"
         assert sidecar["firstFrameId"] == "ff_001"
         assert sidecar["movement"] == "缓慢转身展示服装"
 

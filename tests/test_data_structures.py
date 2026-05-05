@@ -123,11 +123,11 @@ class Test_public_media_ai:
         assert public_media_ai(None) is None
 
     def test_strips_cookie(self) -> None:
-        sidecar = {"kind": "jimeng-image", "productId": "p1", "cookie": "secret"}
+        sidecar = {"kind": "first-frame-image", "productId": "p1", "cookie": "secret"}
         result = public_media_ai(sidecar)
         # cookie should be redacted, not removed
         assert result["cookie"] == "<redacted>"
-        assert result["kind"] == "jimeng-image"
+        assert result["kind"] == "first-frame-image"
         assert result["productId"] == "p1"
 
     def test_keeps_non_cookie_fields(self) -> None:
@@ -140,7 +140,7 @@ class Test_public_media_ai:
 
     def test_style_image_id_and_scene_id_preserved(self) -> None:
         sidecar = {
-            "kind": "jimeng-image",
+            "kind": "first-frame-image",
             "styleImageId": "s1",
             "sceneId": "scene1",
             "productId": "p1",

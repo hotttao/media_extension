@@ -101,7 +101,8 @@ class Test_load_media_ai_sidecar:
         case_file.write_text("# Test task", encoding="utf-8")
         sidecar_file = tmp_path / "task.media-ai.json"
         sidecar_file.write_text(json.dumps({
-            "kind": "jimeng-image",
+            "kind": "first-frame-image",
+            "platform": "jimeng",
             "productId": "prod_001",
             "ipId": "ip_001",
             "styleImageId": "style_001",
@@ -109,7 +110,7 @@ class Test_load_media_ai_sidecar:
 
         sidecar = load_media_ai_sidecar(case_file)
         assert sidecar is not None
-        assert sidecar["kind"] == "jimeng-image"
+        assert sidecar["kind"] == "first-frame-image"
         assert sidecar["productId"] == "prod_001"
 
     def test_returns_none_for_missing_sidecar(self, tmp_path: pathlib.Path) -> None:
