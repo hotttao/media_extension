@@ -218,10 +218,59 @@ class Test_save_media_ai_generated_image:
             assert "uploaded" in result
             assert "saved" in result
         except RuntimeError as e:
-            # Fail if the upload itself errored (upload precedes save in the function)
-            # If save fails with 4xx because product doesn't exist, that's OK
+            # Fail only if the /api/upload step itself errored (before save is called).
+            # If save fails with 4xx because product doesn't exist, that's acceptable.
             msg = str(e)
-            assert "upload" not in msg.lower(), f"Upload failed: {msg}"
+            assert "/api/upload" not in msg, f"Upload step failed: {msg}"
+
+    def test_jimeng_first_frame_upload_with_real_files(self, tmp_path: pathlib.Path) -> None:
+        """Jimeng first-frame-upload with real run data: 4 images, real product/ip/style IDs.
+
+        API: POST /api/products/{id}/first-frame-upload
+        Multipart fields: ipId, generationPath, styleImageId, files (multiple)
+        Expected: HTTP 200 with {"success": true, "count": N, "results": [...]}
+        """
+        cookie = _get_cookie()
+
+        # Real run data from runs/jimeng-f07aff65/
+        run_output = pathlib.Path("D:/Code/media/gpt_image2/runs/jimeng-f07aff65/output")
+        real_files = list(run_output.glob("result-*.webp"))
+        assert len(real_files) == 4, f"Expected 4 real images, found {len(real_files)}: {real_files}"
+
+        # Copy real files to tmp_path
+        img_paths = []
+        for f in sorted(real_files):
+            dst = tmp_path / f.name
+            dst.write_bytes(f.read_bytes())
+            img_paths.append(dst)
+
+        job = Job(
+            id="test-jimeng-real-001",
+            case_file=pathlib.Path("test/task.md"),
+            prompt="test",
+            assets=[],
+            output_dir=tmp_path / "output",
+            media_ai={
+                "baseUrl": MEDIA_AI_BASE_URL,
+                "kind": "first-frame-image",
+                "platform": "jimeng",
+                "productId": "3813528280213094793",
+                "ipId": "981cd79c-5973-429a-8edf-dff3eda45014",
+                "styleImageId": "f07aff65-ba21-4e2c-9580-d599417318f8",
+                "cookie": cookie,
+            },
+        )
+
+        # Test with first image — save_media_ai_generated_image uploads to /api/upload first,
+        # then calls save_media_ai_first_frame_upload for jimeng platform
+        img_path = img_paths[0]
+        result = save_media_ai_generated_image(job, img_path)
+        assert result is not None
+        assert result["kind"] == "first-frame-image"
+        assert "uploaded" in result
+        assert "saved" in result
+        # Save response for first-frame-upload is FirstFrameUploadResponse
+        assert "success" in result["saved"], f"Expected success in save result: {result['saved']}"
 
 
 class Test_save_media_ai_generated_video:

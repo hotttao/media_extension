@@ -97,7 +97,7 @@ def upload_file_multipart(url: str, *, cookie: str | None, file_path: pathlib.Pa
 
 
 def save_media_ai_first_frame_upload(
-    job, output_path: pathlib.Path, ip_id: str, *, base_url: str, cookie: str | None
+    job, output_path: pathlib.Path, ip_id: str, style_image_id: str | None, *, base_url: str, cookie: str | None
 ) -> dict[str, Any]:
     """Upload and save a first-frame image via multipart (Jimeng path)."""
     boundary = f"----codex-{uuid.uuid4().hex}"
@@ -106,10 +106,14 @@ def save_media_ai_first_frame_upload(
     fields = [
         (f"--{boundary}\r\nContent-Disposition: form-data; name=\"ipId\"\r\n\r\n{ip_id}\r\n").encode("utf-8"),
         (f"--{boundary}\r\nContent-Disposition: form-data; name=\"generationPath\"\r\n\r\njimeng\r\n").encode("utf-8"),
-        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{output_path.name}\"\r\nContent-Type: {mime_type}\r\n\r\n").encode("utf-8"),
+    ]
+    if style_image_id:
+        fields.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"styleImageId\"\r\n\r\n{style_image_id}\r\n").encode("utf-8"))
+    fields.extend([
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"{output_path.name}\"\r\nContent-Type: {mime_type}\r\n\r\n").encode("utf-8"),
         file_bytes,
         f"\r\n--{boundary}--\r\n".encode("utf-8"),
-    ]
+    ])
     body = b"".join(fields)
     headers = {
         "Accept": "application/json",
@@ -169,20 +173,22 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
         }
         save_url = f"{base_url}/api/products/{product_id}/style-image/save"
     elif kind == "first-frame-image":
-        if job.platform == "jimeng":
+        if job.media_ai.get("platform") == "jimeng":
             # Jimeng first-frame: multipart upload directly to /first-frame-upload
             ip_id = ensure_text(job.media_ai.get("ipId") or "")
             if not ip_id:
                 raise RuntimeError("jimeng first-frame requires ipId.")
+            style_image_id = ensure_text(job.media_ai.get("styleImageId") or None)
             save_payload_file = job.output_dir / "media-ai-save.json"
             write_json(save_payload_file, {
                 "kind": kind,
+                "platform": "jimeng",
                 "save_url": f"{base_url}/api/products/{product_id}/first-frame-upload",
-                "save_body": {"ipId": ip_id, "generationPath": "jimeng"},
+                "save_body": {"ipId": ip_id, "generationPath": "jimeng", "styleImageId": style_image_id},
                 "output_path": str(output_path),
                 "image_url": image_url,
             })
-            saved = save_media_ai_first_frame_upload(job, output_path, ip_id, base_url=base_url, cookie=cookie)
+            saved = save_media_ai_first_frame_upload(job, output_path, ip_id, style_image_id, base_url=base_url, cookie=cookie)
             return {"kind": kind, "uploaded": {}, "saved": saved}
         else:
             # GPT first-frame: styleImageId-based save via JSON
