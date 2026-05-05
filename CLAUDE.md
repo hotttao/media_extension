@@ -100,10 +100,10 @@ model-image        → platform="gpt"
 
 > Jimeng first-frame-image 业务上就是 first-frame-image，由 sidecar 中的 `platform="jimeng"` 区分来源。video 同理。
 
-### platform handler（extension/content-handlers/）
-- `gpt.js` → `runGptJob` → ChatGPT
-- `jimeng-image.js` → `runJimengImageJob` → jimeng.jianying.com（图片）
-- `jimeng-video.js` → `runJimengVideoJob` → jimeng.jianying.com（视频）
+### platform handler（extension/content-script.js 内联 + extension/jimeng-steps.js 共享 step 函数）
+- `runGptJob` → ChatGPT（内联在 content-script.js）
+- `runJimengImageJob` → jimeng.jianying.com（图片，S1-S8 step 函数在 jimeng-steps.js）
+- `runJimengVideoJob` → jimeng.jianying.com（视频，S1V-S9V step 函数在 jimeng-steps.js）
 
 ## 核心 API 端点
 
@@ -247,9 +247,8 @@ PYTHONPATH=. uv run python scripts/submit_media_ai_model_images.py \
 
 | 文件 | 职责 |
 |------|------|
-| `extension/content-script.js` | 插件主体，轮询 job，执行平台 handler |
-| `extension/content-handlers/jimeng-image.js` | 即梦图片浏览器自动化（S1-S9） |
-| `extension/content-handlers/jimeng-video.js` | 即梦视频浏览器自动化 |
+| `extension/content-script.js` | 插件主体，轮询 job，执行平台 handler（内联 Gpt/JimengImage/JimengVideo） |
+| `extension/jimeng-steps.js` | 共享 step 函数（S1-S8 图片 + S1V-S9V 视频） |
 | `extension/popup.js` | 插件 popup UI |
 | `local_bridge/server.py` | Bridge HTTP 服务器，任务队列，API 端点 |
 | `local_bridge/media_ai_client.py` | Media AI API 客户端（认证内置） |
