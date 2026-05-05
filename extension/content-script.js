@@ -1144,7 +1144,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 async function runTestStep(platform, step) {
-  if (platform !== "jimeng") {
+  if (platform !== "jimeng" && platform !== "jimeng-video") {
     return "ERROR: Only jimeng supported for now";
   }
 
@@ -1241,6 +1241,79 @@ async function runTestStep(platform, step) {
       window.__testSerializedImages = serialized;
       return `OK: Serialized ${serialized.length} image(s). ` +
         `First: ${serialized[0].filename} (${serialized[0].mimeType}, ${(serialized[0].base64Data.length / 1024).toFixed(1)}KB)`;
+    }
+    case "s1v_nav": {
+      const target = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0";
+      const result = await window.stepVideoNav(target);
+      if (!result.ok) return "ERROR: " + result.error;
+      return result.data.status === "navigating" ? "Navigating to jimeng.jianying.com (type=video)..." : "Already on target page: " + result.data.url;
+    }
+    case "s2v_tab": {
+      const result = await window.stepVideoTab();
+      if (!result.ok) return "ERROR: " + result.error;
+      return "OK: Video tab ready - " + JSON.stringify(result.data);
+    }
+    case "s3v_model": {
+      const result = await window.stepVideoModel();
+      if (!result.ok) return "ERROR: " + result.error;
+      return "OK: Model set - " + JSON.stringify(result.data);
+    }
+    case "s4v_ratio": {
+      const result = await window.stepVideoRatio({});
+      if (!result.ok) return "ERROR: " + result.error;
+      return "OK: Ratio selected - " + JSON.stringify(result.data);
+    }
+    case "s5v_firstframe": {
+      // S5V test — check first frame upload zone is present
+      const zones = Array.from(document.querySelectorAll("[class*='reference-item']")).filter(el => {
+        return isVisible(el) && (el.textContent.includes("首帧") || el.textContent.includes("尾帧"));
+      });
+      if (zones.length > 0) return "OK: Upload zone present (" + zones.length + " zones). Full flow requires job.assets.";
+      return "WARN: No upload zone found";
+    }
+    case "s6v_prompt": {
+      const textareas = Array.from(document.querySelectorAll("textarea")).filter(el =>
+        isVisible(el) && el.placeholder.includes("运动方式")
+      );
+      if (textareas.length > 0) return "OK: Prompt textareas found (" + textareas.length + "). Full flow uses job.prompt.";
+      return "WARN: No prompt textarea found";
+    }
+    case "s7v_generate": {
+      const result = await window.stepVideoGenerate();
+      if (!result.ok) return "ERROR: " + result.error;
+      return "OK: Clicked generate button";
+    }
+    case "s8v_wait": {
+      const result = await window.stepVideoWait({ timeoutSeconds: 60 });
+      if (!result.ok) return "ERROR: " + result.error;
+      window.__testResultVideo = result.data;
+      return "OK: Found video URL: " + result.data.videoUrl.slice(0, 50) + " source:" + result.data.sourceType;
+    }
+    case "s9v_download": {
+      const videoData = window.__testResultVideo;
+      if (!videoData) return "ERROR: Run s8v_wait first";
+      try {
+        const fetchResp = await bridgeFetch({ url: videoData.videoUrl, responseType: "blobBase64" });
+        const binary = atob(fetchResp.base64Data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: fetchResp.mimeType || "video/mp4" });
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = String(reader.result || "");
+            const idx = result.indexOf(",");
+            resolve(idx >= 0 ? result.slice(idx + 1) : result);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        const ext = fetchResp.mimeType?.includes("webm") ? ".webm" : ".mp4";
+        window.__testVideoResult = { blob, base64, mimeType: blob.type || "video/mp4", ext };
+        return "OK: Downloaded video (" + (fetchResp.base64Data.length / 1024 / 1024).toFixed(1) + "MB)";
+      } catch (err) {
+        return "ERROR: Failed to download video: " + err.message;
+      }
     }
     default:
       return "ERROR: Unknown step: " + step;
