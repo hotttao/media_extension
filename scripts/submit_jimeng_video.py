@@ -43,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pose-ids-file")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--timeout", type=int, default=120)
-    parser.add_argument("--output-root", default=f"runs/media-ai-jimeng-video-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+    parser.add_argument("--output-root", default="runs")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Print job preview without enqueueing or downloading assets.")
     parser.add_argument("--no-auto-bridge", action="store_true")
