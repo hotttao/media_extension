@@ -197,7 +197,7 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
         prompt, assets = load_case_file(case_path)
         media_ai = load_media_ai_sidecar(case_path)
         job_id = f"{index:03d}-{sanitize_slug(case_path.stem)}-{timestamp}"
-        job_output_dir = output_root / job_id
+        job_output_dir = case_path.resolve().parent
 
         platform: str | None = None
         target_url: str | None = None
