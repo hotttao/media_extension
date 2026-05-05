@@ -142,7 +142,7 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
             }
             save_url = f"{base_url}/api/products/{product_id}/first-frame"
         else:
-            # GPT first-frame: styleImageId-based save
+            # GPT first-frame: styleImageId-based save via JSON
             style_image_id = ensure_text(job.media_ai.get("styleImageId") or "")
             if not style_image_id:
                 raise RuntimeError("first-frame sidecar requires styleImageId.")
@@ -158,7 +158,7 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
         if not ip_id:
             raise RuntimeError("jimeng-image sidecar requires ipId.")
-        save_body = {"ipId": ip_id, "imageUrl": image_url, "generationPath": "gpt"}
+        save_body = {"ipId": ip_id, "imageUrl": image_url, "generationPath": job.platform or "jimeng"}
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     else:
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
