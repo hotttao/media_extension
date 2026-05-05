@@ -4,20 +4,6 @@ const PLATFORMS = [
   { id: "jimeng_video", name: "即梦视频" },
 ];
 
-const TEST_STEPS = {
-  jimeng_image: [
-    { id: "s1_nav", label: "S1 导航" },
-    { id: "s2_tab", label: "S2 Tab" },
-    { id: "s3_model", label: "S3 模型" },
-    { id: "s4_ratio", label: "S4 比例" },
-    { id: "s5_upload", label: "S5 上传" },
-    { id: "s6_prompt", label: "S6 Prompt" },
-    { id: "s7_generate", label: "S7 生成" },
-    { id: "s8_wait", label: "S8 等待" },
-    { id: "s9_report", label: "S9 上报" },
-  ],
-};
-
 const controllerState = {};
 
 function renderPlatformSection(platform) {
@@ -29,9 +15,7 @@ function renderPlatformSection(platform) {
     lastError: null,
   };
 
-  const testSteps = TEST_STEPS[platform.id] || [];
-  const testResultId = `test-result-${platform.id}`;
-  const testResult = (controllerState[`${platform.id}_testResult`] || "");
+  const testSteps = [];
 
   return `
     <div class="platform-section" data-platform="${platform.id}">
@@ -50,25 +34,6 @@ function renderPlatformSection(platform) {
         </div>
         <div class="status-line">${state.lastMessage || "Idle"}</div>
         <div class="error-line">${state.lastError || ""}</div>
-        ${testSteps.length > 0 ? `
-        <div class="test-panel">
-          <div class="test-panel-label">Test Steps (on jimeng page)</div>
-          <div class="test-steps">
-            ${testSteps.map(step => `
-              <button class="test-btn" data-platform="${platform.id}" data-step="${step.id}">${step.label}</button>
-            `).join("")}
-          </div>
-          <div class="test-result ${testResult.startsWith('ERROR') ? 'error' : ''}" id="${testResultId}">${testResult || "Click a step to test..."}</div>
-        </div>
-        ` : ""}
-        ${platform.id === "jimeng_image" ? `
-        <div class="manual-panel">
-          <div class="manual-panel-label">Manual Job Input (JSON)</div>
-          <textarea class="manual-input" id="manual-input-${platform.id}" placeholder='{"id":"test-1","caseFile":"D:\\runs\\xxx\\task.md","mediaAi":{"kind":"jimeng-image","productId":"...","styleImageId":"...","sceneId":"...","styleImageUrl":"http://192.168.x.x/...","sceneUrl":"http://192.168.x.x/...","productName":"\u4ea7\u54c1\u63cf\u8ff0"}}'></textarea>
-          <button class="manual-run-btn" data-platform="${platform.id}">Run Job Directly</button>
-          <div class="manual-result" id="manual-result-${platform.id}"></div>
-        </div>
-        ` : ""}
       </div>
     </div>
   `;
@@ -117,52 +82,13 @@ function render() {
     });
   });
 
-  // Bind test step buttons
-  container.querySelectorAll(".test-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const platform = btn.dataset.platform;
-      const step = btn.dataset.step;
-      btn.disabled = true;
-      btn.textContent = "...";
-
-      const resultEl = document.getElementById(`test-result-${platform}`);
-      resultEl.textContent = "Running test step...";
-      resultEl.className = "test-result";
-
-      try {
-        const response = await chrome.runtime.sendMessage({
-          type: "test:step",
-          platform,
-          step,
-        });
-        const result = response?.result || response?.error || "No response";
-        const isError = result.startsWith("ERROR");
-        resultEl.textContent = result;
-        resultEl.className = `test-result ${isError ? "error" : ""}`;
-        controllerState[`${platform}_testResult`] = result;
-      } catch (err) {
-        resultEl.textContent = "ERROR: " + err.message;
-        resultEl.className = "test-result error";
-        controllerState[`${platform}_testResult`] = "ERROR: " + err.message;
-      }
-
-      btn.disabled = false;
-      const stepBtn = Array.from(document.querySelectorAll(`.test-btn[data-platform="${platform}"]`)).find(b => b.dataset.step === step);
-      if (stepBtn) stepBtn.textContent = step.replace("s", "S").replace("_", " ");
-      // Restore label
-      const originalLabel = TEST_STEPS[platform]?.find(s => s.id === step)?.label || step;
-      btn.textContent = originalLabel;
-    });
-  });
-
   // Bind manual run button
   container.querySelectorAll(".manual-run-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const platform = btn.dataset.platform;
       const inputEl = document.getElementById(`manual-input-${platform}`);
       const resultEl = document.getElementById(`manual-result-${platform}`);
-      const raw = inputEl.value.trim();
-
+      
       btn.disabled = true;
       btn.textContent = "Running...";
       resultEl.textContent = "";

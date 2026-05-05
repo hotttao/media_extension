@@ -167,15 +167,25 @@ async function runJimengImageJobHandler(job, serverUrl) {
     if (!waitResult.ok) { throw new Error(`[S8] ${waitResult.error} | DOM: ${snapshotDOM()}`); }
 
     const resultImages = waitResult.data.images;
+    console.log("[JimengImage] stepWait returned", resultImages.length, "images:", resultImages.map(i => i.src.slice(0, 50)));
     await record(`Found ${resultImages.length} generated image(s)`);
 
+    // stepWait already captures HD CDN URLs directly (width > 300 in modal)
+    // No need to click again — just use img.src as-is
     const serializedImages = [];
     for (let i = 0; i < resultImages.length; i++) {
       const img = resultImages[i];
+      const imgSrc = img.src;
       try {
-        const response = await fetch(img.src, { credentials: "include" });
-        if (!response.ok) continue;
-        const blob = await response.blob();
+        console.log("[JimengImage] Fetching image via bridgeFetch:", imgSrc.slice(0, 60));
+        // Use bridgeFetch instead of native fetch — runs in extension context with proper cookie jar
+        console.log("[JimengImage] calling bridgeFetch { url:", imgSrc.slice(0, 60), ", responseType: 'blobBase64' }");
+        const fetchResp = await bridgeFetch({ url: imgSrc, responseType: "blobBase64" });
+        console.log("[JimengImage] bridgeFetch ok, mimeType:", fetchResp.mimeType, "data len:", fetchResp.base64Data?.length);
+        const binaryRaw = atob(fetchResp.base64Data);
+        const bytes = new Uint8Array(binaryRaw.length);
+        for (let i = 0; i < binaryRaw.length; i++) bytes[i] = binaryRaw.charCodeAt(i);
+        const blob = new Blob([bytes], { type: fetchResp.mimeType });
         const mimeType = blob.type || "image/png";
         const base64 = await blobToBase64(blob);
         const ext = ({ "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif" })[mimeType] || ".png";
@@ -183,18 +193,30 @@ async function runJimengImageJobHandler(job, serverUrl) {
           filename: `result-${String(i + 1).padStart(2, "0")}${ext}`,
           mimeType,
           base64Data: base64,
-          sourceUrl: img.src,
+          sourceUrl: imgSrc,
         });
+        await record(`Saved image ${i + 1}: ${mimeType}`);
       } catch (err) {
         await record(`Failed to serialize image ${i + 1}: ${err.message}`);
+        console.error("[JimengImage] Serialization error:", err.message);
       }
     }
 
-    await record("Saving results to local bridge", { imageCount: serializedImages.length });
-    await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/result`, {
-      images: serializedImages,
-      logs,
-    });
+    console.log("[JimengImage] Saving results to bridge, images:", serializedImages.length);
+    console.log("[JimengImage] bridgeFetch call → url:", imgSrc.slice(0, 60), "responseType: blobBase64");
+    console.log("[JimengImage] postJson call → url:", `${serverUrl}/v1/job/${encodeURIComponent(job.id)}/result`);
+    console.log("[JimengImage] postJson payload images count:", serializedImages.length, "logs count:", logs.length);
+    try {
+      await record("Saving results to local bridge", { imageCount: serializedImages.length });
+      const bridgeResp = await postJson(`${serverUrl}/v1/job/${encodeURIComponent(job.id)}/result`, {
+        images: serializedImages,
+        logs,
+      });
+      console.log("[JimengImage] /result response:", JSON.stringify(bridgeResp).slice(0, 200));
+    } catch (err) {
+      console.error("[JimengImage] /result failed:", err.message);
+      throw err;
+    }
 
     controllerState.lastError = null;
     controllerState.lastMessage = `Completed ${job.id}`;
@@ -1124,20 +1146,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         controllerState.currentJobId = null;
         sendResponse({ ok: true, state: { ...controllerState } });
       })
-      .catch(async (error) => {
+      .catch((error) => {
         const reason = String(error);
         controllerState.lastError = reason;
         controllerState.lastMessage = `Failed ${controllerState.currentJobId || "job"}: ${reason}`;
         // Sync failure to bridge so job status is marked failed with reason
+        // Fire and forget — don't await, so we can immediately rethrow to signal failure
         if (controllerState.currentJobId) {
-          try {
-            await postJson(
-              `${controllerState.serverUrl}/v1/job/${encodeURIComponent(controllerState.currentJobId)}/fail`,
-              { reason }
-            );
-          } catch (_failError) {
-            // Bridge call failed — still report to caller
-          }
+          postJson(
+            `${controllerState.serverUrl}/v1/job/${encodeURIComponent(controllerState.currentJobId)}/fail`,
+            { reason }
+          ).catch(() => {});
         }
         controllerState.busy = false;
         controllerState.currentJobId = null;

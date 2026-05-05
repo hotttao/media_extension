@@ -148,7 +148,18 @@ async function runJobInFreshTab(job) {
         type: "controller:runSingleJob",
         serverUrl: controllerState.serverUrl,
         job,
-      }).then(resolve).catch(reject).finally(() => clearTimeout(timeout));
+      }).then((response) => {
+        clearTimeout(timeout);
+        // If content-script reports job failure (ok: false), treat as rejected
+        if (response && response.ok === false) {
+          reject(new Error(response.error || "Job failed"));
+        } else {
+          resolve(response);
+        }
+      }).catch((err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
     });
 
     await sendJobWithTimeout;
@@ -156,11 +167,12 @@ async function runJobInFreshTab(job) {
   } finally {
     // Only close window/tab on success — on error leave page open for debugging
     if (jobSucceeded) {
-      if (windowId !== null) {
-        await chrome.windows.remove(windowId).catch(() => {});
-      } else if (tabId !== null) {
-        await chrome.tabs.remove(tabId).catch(() => {});
-      }
+      console.log("[runJobInFreshTab] job SUCCEEDED — would close windowId:", windowId, "tabId:", tabId);
+      // if (windowId !== null) {
+      //   await chrome.windows.remove(windowId).catch(() => {});
+      // } else if (tabId !== null) {
+      //   await chrome.tabs.remove(tabId).catch(() => {});
+      // }
     } else {
       console.log("[runJobInFreshTab] job failed/error — page left open, tab:", tabId);
     }
@@ -234,11 +246,13 @@ async function syncStateFromTab() {
 }
 
 async function bridgeFetch({ url, method = "GET", headers = {}, body = null, responseType = "json" }) {
+  console.log("[bridgeFetch] URL:", url, "responseType:", responseType);
   const response = await fetch(url, {
     method,
     headers,
     body: body == null ? null : JSON.stringify(body),
   });
+  console.log("[bridgeFetch] response status:", response.status, "ok:", response.ok);
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
@@ -343,9 +357,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "bridge:fetch") {
+    console.log("[bridge:fetch] incoming request:", JSON.stringify(message.request).slice(0, 200));
     bridgeFetch(message.request)
-      .then((payload) => sendResponse(payload))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .then((payload) => { console.log("[bridge:fetch] success"); sendResponse(payload); })
+      .catch((error) => { console.error("[bridge:fetch] error:", error.message); sendResponse({ ok: false, error: String(error) }); });
     return true;
   }
 

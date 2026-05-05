@@ -736,26 +736,37 @@ class RequestHandler(BaseHTTPRequestHandler):
         result_match = re.fullmatch(r"/v1/job/([^/]+)/result", path)
         if result_match:
             job_id = result_match.group(1)
+            log_info("[/result] received job_id=%s", job_id)
             job = self.server.store.get_job(job_id)
             if not job:
+                log_warning("[/result] job not found job_id=%s", job_id)
                 send_json(self, HTTPStatus.NOT_FOUND, {"error": "job_not_found"})
                 return
 
+            log_info("[/result] job found job_id=%s output_dir=%s", job_id, job.output_dir)
             payload = parse_json_body(self)
+            log_info("[/result] payload has %s images, %s logs", len(payload.get("images", [])), len(payload.get("logs", [])))
             job.output_dir.mkdir(parents=True, exist_ok=True)
             (job.output_dir / "prompt.md").write_text(job.prompt, encoding="utf-8")
             if job.progress:
                 write_json(job.output_dir / "logs.json", job.progress)
 
             images = payload.get("images", [])
+            log_info("[/result] processing %s images", len(images))
             saved_files: list[str] = []
             media_ai_results: list[dict[str, Any]] = []
             skipped_files: list[dict[str, Any]] = []
             asset_hashes = {asset["sha256"] for asset in job.assets}
             for index, image in enumerate(images, start=1):
                 base64_data = image.get("base64Data", "")
-                binary = base64.b64decode(base64_data)
-                image_hash = sha256_bytes(binary)
+                log_info("[/result] image %s base64 length=%s filename=%s", index, len(base64_data), image.get("filename"))
+                try:
+                    binary = base64.b64decode(base64_data)
+                    image_hash = sha256_bytes(binary)
+                    log_info("[/result] image %s decoded binary size=%s sha256=%s", index, len(binary), image_hash.hex()[:16])
+                except Exception as e:
+                    log_error("[/result] image %s base64 decode failed: %s", index, e)
+                    raise
                 if image_hash in asset_hashes:
                     skipped_files.append(
                         {
@@ -765,13 +776,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                             "sourceUrl": image.get("sourceUrl"),
                         }
                     )
+                    log_info("[/result] image %s SKIPPED (matches input asset)", index)
                     continue
                 original_name = ensure_text(image.get("filename") or f"result-{index:02d}.png")
                 suffix = pathlib.Path(original_name).suffix or ".png"
                 output_name = f"result-{len(saved_files) + 1:02d}{suffix}"
                 output_path = job.output_dir / output_name
+                log_info("[/result] writing image %s bytes to %s", len(binary), output_path)
                 output_path.write_bytes(binary)
                 saved_files.append(output_name)
+                log_info("[/result] image %s saved as %s total=%s", index, output_name, len(saved_files))
                 if len(saved_files) == 1 and job.media_ai:
                     try:
                         media_ai_result = save_media_ai_generated_image(job, output_path)
@@ -835,18 +849,20 @@ class RequestHandler(BaseHTTPRequestHandler):
             write_json(job.output_dir / "metadata.json", metadata)
             if saved_files and not media_ai_failed:
                 self.server.store.mark_completed(job_id)
-                log_info("saved generated images job_id=%s count=%s", job.id, len(saved_files))
-                send_json(
-                    self,
-                    HTTPStatus.OK,
-                    {
-                        "ok": True,
-                        "savedFiles": saved_files,
-                        "skippedFiles": skipped_files,
-                        "mediaAiResults": media_ai_results,
-                    },
-                )
-                return
+                log_info("[/result] job COMPLETED saved_files=%s", saved_files)
+                log_info("[/result] final status=%s saved_files=%s skipped=%s media_ai_failed=%s", status, saved_files, len(skipped_files), media_ai_failed)
+            log_info("[/result] sending OK response to client")
+            send_json(
+                self,
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "savedFiles": saved_files,
+                    "skippedFiles": skipped_files,
+                    "mediaAiResults": media_ai_results,
+                },
+            )
+            return
 
             reason = (
                 f"Media AI save failed: {media_ai_results}"

@@ -198,8 +198,17 @@
     }
     await delay(delayMs);
 
-    const options = Array.from(document.querySelectorAll('[role="option"]')).filter(isVisible);
-    console.log("[stepModel] options found:", options.length, options.map(o => o.textContent?.trim().slice(0, 30)));
+    // Log ALL listboxes and their option children for debugging
+    const listboxes = Array.from(document.querySelectorAll('[role="listbox"]'));
+    console.log("[stepModel] listboxes found:", listboxes.length);
+    listboxes.forEach((lb, i) => {
+      const opts = lb.querySelectorAll('[role="option"]');
+      console.log(`  listbox[${i}] text:${lb.textContent.trim().slice(0,40)} options:${opts.length}`);
+      Array.from(opts).slice(0,3).forEach((o, j) => console.log(`    opt[${j}]: "${o.textContent.trim().slice(0,20)}"`));
+    });
+
+    const options = Array.from(document.querySelectorAll('[role="option"]'));
+    console.log("[stepModel] raw querySelectorAll('[role=option]') result:", options.length);
     // Fuzzy: prefer "Lite" option, fall back to any model option with version number
     let targetOption = options.find(el =>
       el.textContent?.trim().includes("Lite")
@@ -212,7 +221,7 @@
     }
     if (!targetOption) {
       const optionTexts = options.map(o => o.textContent?.trim().slice(0, 40)).join(" | ");
-      throw new Error(`No selectable model option found (options: ${optionTexts})`);
+      throw new Error(`No selectable model option found (options: ${optionTexts || "NONE"})`);
     }
 
     targetOption.click();
@@ -481,46 +490,150 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Step 8: Wait for stable images
+  // Step 8: Wait for generated images (verified by clicking into HD modal)
   // ---------------------------------------------------------------------------
   async function stepWait(job) {
-    const deadline = Date.now() + (job.timeoutSeconds ? job.timeoutSeconds * 1000 : 600000);
-    let stableSince = 0;
-    let lastKeys = [];
-    let resultImages = [];
+    // jimeng generates HD images asynchronously after placeholder appears.
+    // Strategy: wait for /generate page → click each card → check modal for HD blob → done.
+    // Timeout: 5 minutes (300s) — only fail if no card can be opened in that time.
+    const TIMEOUT_MS = (job.timeoutSeconds ? job.timeoutSeconds : 300) * 1000;
+    const deadline = Date.now() + TIMEOUT_MS;
+    const POLL_INTERVAL_MS = 3000;
+    const CLICK_RETRY_MS = 2000;
 
-    const baselineKeys = new Set();
-    for (const img of document.querySelectorAll("img")) {
-      if (img.src) baselineKeys.add(img.src);
-    }
-
-    while (Date.now() < deadline) {
-      const currentImgs = Array.from(document.querySelectorAll("img")).filter(img => {
-        if (!isVisible(img)) return false;
-        if (baselineKeys.has(img.src)) return false;
-        const rect = img.getBoundingClientRect();
-        return rect.width > 100 && rect.height > 100;
-      });
-
-      if (currentImgs.length > 0) {
-        const currentKeys = currentImgs.map(img => img.src).sort();
-        const sameAsPrevious = currentKeys.length === lastKeys.length && currentKeys.every((k, i) => k === lastKeys[i]);
-        if (sameAsPrevious) {
-          if (!stableSince) stableSince = Date.now();
-          if (Date.now() - stableSince > 8000) {
-            resultImages = currentImgs;
-            break;
-          }
-        } else {
-          stableSince = Date.now();
-          lastKeys = currentKeys;
+    // Wait for /generate navigation (Jimeng transitions here after clicking generate)
+    if (!window.location.href.includes("/generate")) {
+      console.log("[stepWait] waiting for /generate navigation...");
+      const navDeadline = Date.now() + 60000;
+      while (Date.now() < navDeadline) {
+        if (window.location.href.includes("/generate")) {
+          console.log("[stepWait] navigated to:", window.location.href);
+          break;
         }
+        await delay(500);
       }
-      await delay(2000);
     }
 
-    if (resultImages.length === 0) return { ok: false, data: null, error: "Timed out waiting for images" };
-    return { ok: true, data: { images: resultImages.slice(0, 4) }, error: null };
+    console.log("[stepWait] START, deadline in", Math.round((deadline - Date.now()) / 1000), "s at:", window.location.href);
+
+    // Helper: find all candidate thumbnail images in record-box grid
+    // Note: getBoundingClientRect may return 0 in some measurement contexts, so
+    // we rely on byteimg.com CDN URL presence as primary filter
+    const getThumbnailImages = () => {
+      const recordBox = document.querySelector('[class*="record-box-wrapper"]');
+      if (!recordBox) return [];
+      const imgs = recordBox.querySelectorAll("img");
+      return Array.from(imgs).filter(img => {
+        if (!img.src || img.src === "about:blank" || img.src.startsWith("data:")) return false;
+        // Must be a jimeng CDN image (byteimg.com)
+        if (!img.src.includes("byteimg.com")) return false;
+        // Filter out tiny mosaic/icon images by src pattern
+        if (img.src.includes("mosaic") || img.src.includes("avatar")) return false;
+        return true;
+      });
+    };
+
+    // Helper: click a thumbnail to open detail modal, return HD URL if ready
+    // HD in modal: width > 300 AND src is a CDN URL (not data: or blob:)
+    // (Jimeng doesn't use blob: URLs in the modal preview, it shows a high-res CDN URL)
+    const tryGetHdFromCard = (imgEl) => {
+      return new Promise((resolve) => {
+        // Close any open modal — ensures we get a fresh modal for this specific card
+        document.body.click();
+        imgEl.click();
+        // Poll for modal with HD image (every 500ms, up to 45s per card)
+        let attempts = 0;
+        const maxAttempts = 90;
+        const checkInterval = setInterval(() => {
+          attempts++;
+          const modal = document.querySelector(".lv-modal-wrapper");
+          if (!modal) {
+            if (attempts >= maxAttempts) {
+              clearInterval(checkInterval);
+              document.body.click();
+              setTimeout(() => resolve(null), 100);
+            }
+            return;
+          }
+          // Look for HD image: width > 300 and CDN URL (not blob:, not data:)
+          const modalImgs = modal.querySelectorAll("img");
+          const hdImg = Array.from(modalImgs).find(img => {
+            try {
+              const w = img.getBoundingClientRect().width;
+              const src = img.src;
+              return w > 300 && src.startsWith("http") && !src.startsWith("data:");
+            } catch { return false; }
+          });
+          if (hdImg) {
+            clearInterval(checkInterval);
+            const hdUrl = hdImg.src;
+            console.log("[stepWait] HD found:", hdUrl.slice(0, 60), "w:", Math.round(hdImg.getBoundingClientRect().width));
+            // Close modal
+            document.body.click();
+            setTimeout(() => resolve(hdUrl), 200);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(checkInterval);
+            document.body.click();
+            setTimeout(() => resolve(null), 100);
+          }
+        }, 500);
+      });
+    };
+
+    // Main loop: collect up to 4 HD images by clicking each thumbnail in order
+    // Start from index 0, advance after each successful HD capture
+    const resultUrls = [];
+    let tryIndex = 0;
+    const MAX_CONSECUTIVE_FAILURES = 8;
+
+    while (Date.now() < deadline && resultUrls.length < 4) {
+      const thumbnails = getThumbnailImages();
+      console.log("[stepWait] thumbnails:", thumbnails.length, "captured:", resultUrls.length, "next index:", tryIndex);
+
+      if (thumbnails.length === 0) {
+        console.log("[stepWait] no thumbnails yet, waiting 60s...");
+        await delay(60000);  // wait 1 min before first retry
+        tryIndex = 0;
+        continue;
+      }
+
+      // Try the next uncaptured thumbnail
+      if (tryIndex >= thumbnails.length) {
+        console.log("[stepWait] all thumbnails tried, waiting 5s before retry...");
+        tryIndex = 0;
+        await delay(5000);  // wait 5s between retry cycles
+        continue;
+      }
+
+      const target = thumbnails[tryIndex];
+      console.log("[stepWait] attempting HD extraction from card", tryIndex, "...");
+
+      try {
+        const hdUrl = await tryGetHdFromCard(target);
+        if (hdUrl) {
+          resultUrls.push(hdUrl);
+          console.log("[stepWait] HD captured:", hdUrl.slice(0, 50), "total:", resultUrls.length);
+          tryIndex = 0; // Reset for next image
+        } else {
+          console.log("[stepWait] card", tryIndex, "not ready, waiting 2s then next...");
+          await delay(2000);  // wait 2s between retry
+          tryIndex++;
+        }
+      } catch(e) {
+        console.log("[stepWait] card", tryIndex, "error:", e.message);
+        await delay(2000);
+        tryIndex++;
+      }
+    }
+
+    if (resultUrls.length === 0) {
+      return { ok: false, data: null, error: `Timed out after 5min, no HD images captured` };
+    }
+
+    console.log("[stepWait] completed, captured", resultUrls.length, "HD blobs");
+    // Return objects with src pointing to HD blob URLs
+    const resultImages = resultUrls.map(url => ({ src: url }));
+    return { ok: true, data: { images: resultImages }, error: null };
   }
 
   // ---------------------------------------------------------------------------

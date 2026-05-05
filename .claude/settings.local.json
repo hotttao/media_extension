@@ -152,7 +152,11 @@
       "WebSearch",
       "WebFetch(domain:zhuanlan.zhihu.com)",
       "Bash(python3 -c \"import sys,json; [print\\(t[''''targetId''''], t[''''title'''']\\) for t in json.load\\(sys.stdin\\) if ''''jimeng'''' in t[''''url'''']]\")",
-      "Bash(identify ./ratio_debug.png)"
+      "Bash(identify ./ratio_debug.png)",
+      "Bash(python3 -c \"import sys,json; [print\\(t[''''targetId''''],t[''''url'''']\\) for t in json.load\\(sys.stdin\\) if ''''jimeng'''' in t.get\\(''''url'''',''''''''\\)]\")",
+      "Bash(node -e \"require\\(''''fs''''\\).readFileSync\\(''''extension/jimeng-steps.js'''',''''utf8''''\\)\")",
+      "Bash(command -v ast-grep)",
+      "Bash(curl -s -X POST \"http://localhost:3456/eval?target=554BCA5B822114B7D4163CB7C349A81B\" -d 'eval\\(\"\"\\(function\\(\\){window.__y=55}\\)\\(\\)\"\"\\)')"
     ]
   }
 }

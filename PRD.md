@@ -148,4 +148,22 @@ task 保存在 media_ai_task 表中。表中需要包含如下字段:
 
 ```
 uv run -m  scripts.submit_jimeng_image     --style-image-id f07aff65-ba21-4e2c-9580-d599417318f8    --scene-id 3d30e5eb-292d-4574-95f6-abb25e00fc6c     --dry-run
+
+
+
+http://192.168.2.38/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-frame-images/result-01_8884a1d0-b942-4d62-a1e1-01c34272bf77.png
+
+{
+  "kind": "first-frame-image",
+  "baseUrl": "http://localhost:3000",
+  "productId": "3813528280213094793",
+  "productName": "3813528280213094793",
+  "ipId": "981cd79c-5973-429a-8edf-dff3eda45014",
+  "styleImageId": "f07aff65-ba21-4e2c-9580-d599417318f8",
+  "styleImageUrl": "http://192.168.2.38/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/style-images/result-01_abaacbe9-39b6-4137-a244-d68f7bed8dfa.png",
+  "sceneId": "d0e56cbd-1ef9-4b71-8ace-c4adb3cc017a",
+  "sceneName": "日式原木极简风",
+  "sceneUrl": "http://192.168.2.38/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/materials/微信图片_20260422220147_2112_164_9658036e-21ec-4b62-ad5d-15e2371fbdfa.png",
+  "cookie": "next-auth.csrf-token=64f1479e1ac7911fe7d61cdc57c3f6c969feb157b964d57dae11fd719a4c85fd%7C3a799734f9fb028872f1ff83c5098feb96390604eefb76666245f54221d2d33d; next-auth.callback-url=http%3A%2F%2Flocalhost%3A3000; next-auth.session-token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..7MuWW6OjXhmNJ1zg.zBR0Fm82J5Ui9USgIjPGM9gkUVoyu6JSJlF0H-p1bbk8NBapD0u1YJ2tcRfJtRRNV756KJVVyu6Ih-3dr834xbZqaK8tn1PrquxNZZsgKuj2uO44IGoukzZc-xaG3vrlzf4h28yD41lYFI86tqQvW7T8K6aK8uZFlHJd5bzgOfBibFhRwHP6x_x5gToxNFOR2wn5jVNu87nOeUvqHsu_U83C70IPQCts0DFL4v-AliFCursSBaHghfVGup5bcoP1HeOQ1v2sVomfVnzxzONIdxd7Gt2TadJp6wCxg17fdh-77C1YiVOveJns9jbjwPuQ7keahiyVbog9tXI6Q1Cj_xTaHUfg0qFHU01QunaxvLEz7GbNqk5WDyfyaQ.os9K2wok94vfuktV7LsExw"
+}
 ```
