@@ -29,5 +29,5 @@
 
 **Success Response Schema:**
 
-[SuccessResponse](../schemas/Success/SuccessResponse.md)
+[FirstFrameUploadResponse](../schemas/First/FirstFrameUploadResponse.md)
 
