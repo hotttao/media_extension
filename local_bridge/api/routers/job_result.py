@@ -1,6 +1,7 @@
 """Router for /v1/job/{job_id}/result."""
 import base64
 from fastapi import APIRouter, HTTPException, Request
+from loguru import logger
 from local_bridge.api.schemas import (
     ResultSubmitRequest,
     ResultSubmitResponse,
@@ -61,6 +62,7 @@ def submit_result(job_id: str, body: ResultSubmitRequest, request: Request):
                 if result:
                     media_ai_results.append(result)
             except Exception as e:
+                logger.exception("[submit_result] save_media_ai_generated_image failed: {error}", error=e)
                 media_ai_results.append({"error": str(e)})
 
     # Process videos
@@ -84,6 +86,7 @@ def submit_result(job_id: str, body: ResultSubmitRequest, request: Request):
                 if result:
                     media_ai_results.append(result)
             except Exception as e:
+                logger.exception("[submit_result] save_media_ai_generated_video failed: {error}", error=e)
                 media_ai_results.append({"error": str(e)})
 
     # Write metadata
