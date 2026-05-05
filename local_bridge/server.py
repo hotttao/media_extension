@@ -506,7 +506,28 @@ def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[s
         }
         save_url = f"{base_url}/api/products/{product_id}/style-image/save"
     elif kind == "first-frame-image":
-        return save_media_ai_first_frame_upload(job, output_path)
+        if job.platform == "jimeng":
+            # Jimeng first-frame: ipId-based save via multipart /first-frame-upload
+            return save_media_ai_first_frame_upload(job, output_path)
+        else:
+            # GPT first-frame: styleImageId-based save via JSON /first-frame
+            style_image_id = ensure_text(job.media_ai.get("styleImageId") or "")
+            if not style_image_id:
+                raise RuntimeError("first-frame-image sidecar requires styleImageId.")
+            save_body = {
+                "styleImageId": style_image_id,
+                "sceneId": job.media_ai.get("sceneId"),
+                "composition": job.media_ai.get("composition"),
+                "imageUrl": image_url,
+                "generationPath": job.platform or "gpt",
+            }
+            save_url = f"{base_url}/api/products/{product_id}/first-frame"
+            save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
+            return {
+                "kind": kind,
+                "uploaded": upload_result,
+                "saved": save_result,
+            }
     elif kind == "jimeng-image":
         # Jimeng image generation: save with ipId to first_frames table
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
