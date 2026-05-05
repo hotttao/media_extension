@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 
 from loguru import logger
 
-from local_bridge.domain.models import ensure_text, sha256_bytes
+from local_bridge.domain.models import ensure_text, sha256_bytes, write_json
 
 
 def request_json(method: str, url: str, *, cookie: str | None, body: dict[str, Any] | None = None, timeout: int = 120) -> Any:
@@ -138,6 +138,7 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
     """Upload and save a generated image to Media AI."""
     if not job.media_ai:
         return None
+    job.output_dir.mkdir(parents=True, exist_ok=True)
     base_url = ensure_text(job.media_ai.get("baseUrl") or "http://localhost:3000").rstrip("/")
     cookie = ensure_text(job.media_ai.get("cookie") or "").strip() or None
     kind = ensure_text(job.media_ai.get("kind") or "model-image")
@@ -173,6 +174,14 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
             ip_id = ensure_text(job.media_ai.get("ipId") or "")
             if not ip_id:
                 raise RuntimeError("jimeng first-frame requires ipId.")
+            save_payload_file = job.output_dir / "media-ai-save.json"
+            write_json(save_payload_file, {
+                "kind": kind,
+                "save_url": f"{base_url}/api/products/{product_id}/first-frame-upload",
+                "save_body": {"ipId": ip_id, "generationPath": "jimeng"},
+                "output_path": str(output_path),
+                "image_url": image_url,
+            })
             saved = save_media_ai_first_frame_upload(job, output_path, ip_id, base_url=base_url, cookie=cookie)
             return {"kind": kind, "uploaded": {}, "saved": saved}
         else:
@@ -195,6 +204,14 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
         save_body = {"ipId": ip_id, "imageUrl": image_url}
         save_url = f"{base_url}/api/products/{product_id}/model-image/save"
 
+    save_payload_file = job.output_dir / "media-ai-save.json"
+    write_json(save_payload_file, {
+        "kind": kind,
+        "save_url": save_url,
+        "save_body": save_body,
+        "output_path": str(output_path),
+        "image_url": image_url,
+    })
     logger.info("[save] POST {url} body={body}", url=save_url, body=save_body)
     save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
     logger.info("[save] OK result={result}", result=save_result)
@@ -205,6 +222,7 @@ def save_media_ai_generated_video(job, output_path: pathlib.Path) -> dict[str, A
     """Upload and save a generated video to Media AI."""
     if not job.media_ai:
         return None
+    job.output_dir.mkdir(parents=True, exist_ok=True)
     base_url = ensure_text(job.media_ai.get("baseUrl") or "http://localhost:3000").rstrip("/")
     cookie = ensure_text(job.media_ai.get("cookie") or "").strip() or None
     product_id = ensure_text(job.media_ai.get("productId") or "")
@@ -231,5 +249,13 @@ def save_media_ai_generated_video(job, output_path: pathlib.Path) -> dict[str, A
         save_body["movement"] = movement
 
     save_url = f"{base_url}/api/products/{product_id}/videos"
+    save_payload_file = job.output_dir / "media-ai-save.json"
+    write_json(save_payload_file, {
+        "kind": "video",
+        "save_url": save_url,
+        "save_body": save_body,
+        "output_path": str(output_path),
+        "video_url": video_url,
+    })
     save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
     return {"kind": "video", "uploaded": upload_result, "saved": save_result}
