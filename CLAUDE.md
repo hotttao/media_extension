@@ -77,7 +77,8 @@ class Job:
 
 | 字段 | 说明 |
 |------|------|
-| `kind` | 任务类型，决定 platform 映射 |
+| `kind` | 任务类型，决定 save 端点 |
+| `platform` | 执行平台，`jimeng` 或 `gpt`（决定 targetUrl 和 save 路径） |
 | `baseUrl` | Media AI 服务地址 |
 | `productId` | 产品 ID |
 | `ipId` | IP ID |
@@ -87,17 +88,17 @@ class Job:
 | `poseId` | 姿势 ID |
 | `uploadSubDir` | 上传子目录 |
 
-**kind → platform 映射（build_jobs 中定义）：**
+**kind + platform → platform 映射（build_jobs 中定义）：**
 ```
 first-frame-image  + platform="jimeng" → platform="jimeng", targetUrl="...?type=image"
 first-frame-image  + 无/其他 platform  → platform="gpt"
-video              → platform="jimeng", targetUrl="...?type=video"
+video              + platform="jimeng" → platform="jimeng", targetUrl="...?type=video"
 style-image        → platform="gpt"
 model-image        → platform="gpt"
 (其他)              → platform=None, targetUrl=None
 ```
 
-> Jimeng first-frame-image 业务上就是 first-frame-image，由 sidecar 中的 `platform="jimeng"` 区分来源。
+> Jimeng first-frame-image 业务上就是 first-frame-image，由 sidecar 中的 `platform="jimeng"` 区分来源。video 同理。
 
 ### platform handler（extension/content-handlers/）
 - `gpt.js` → `runGptJob` → ChatGPT
@@ -147,13 +148,23 @@ pending → claimed → completed
 
 ### Submit 脚本 → API 端点 → Platform 映射总表
 
-| Submit 脚本 | API 端点 | HTTP | Task kind | Platform | 说明 |
-|------------|---------|------|-----------|----------|------|
-| `scripts/submit_jimeng_image.py` | `/v1/single/jimeng-image` | POST | `first-frame-image` | `jimeng` | 即梦文生图（插件直接调 single endpoint） |
-| `scripts/submit_jimeng_video.py` | `/v1/single/jimeng-video` | POST | `video` | `jimeng` | 即梦文生视频（插件直接调 single endpoint） |
-| `scripts/submit_media_ai_first_frame_images.py` | `/v1/jobs` | POST | `first-frame-image` | `gpt` | 批量提交首帧图任务 |
-| `scripts/submit_media_ai_style_images.py` | `/v1/jobs` | POST | `style-image` | `gpt` | 批量提交定妆图任务 |
-| `scripts/submit_media_ai_model_images.py` | `/v1/jobs` | POST | `model-image` | `gpt` | 批量提交模特图任务 |
+| Submit 脚本 | API 端点 | Task kind | Platform | Save 端点 | Save 方式 | 说明 |
+|------------|---------|-----------|----------|-----------|-----------|------|
+| `scripts/submit_jimeng_image.py` | `/v1/jobs` | `first-frame-image` | `jimeng` | `/first-frame-upload` | multipart | 即梦文生图 |
+| `scripts/submit_jimeng_video.py` | `/v1/jobs` | `video` | `jimeng` | `/videos` | JSON | 即梦文生视频 |
+| `scripts/submit_media_ai_first_frame_images.py` | `/v1/jobs` | `first-frame-image` | `gpt` | `/first-frame` | JSON | GPT 首帧图 |
+| `scripts/submit_media_ai_style_images.py` | `/v1/jobs` | `style-image` | `gpt` | `/style-image/save` | JSON | GPT 定妆图 |
+| `scripts/submit_media_ai_model_images.py` | `/v1/jobs` | `model-image` | `gpt` | `/model-image/save` | JSON | GPT 模特图 |
+
+### Single API 端点 → kind/Platform 映射
+
+| API 端点 | Task kind | Platform | Save 端点 | Save 方式 | 说明 |
+|---------|-----------|----------|-----------|-----------|------|
+| `POST /v1/single/jimeng-image` | `first-frame-image` | `jimeng` | `/first-frame-upload` | multipart | 即梦文生图 |
+| `POST /v1/single/jimeng-video` | `video` | `jimeng` | `/videos` | JSON | 即梦文生视频 |
+| `POST /v1/single/first-frame-image` | `first-frame-image` | `gpt` | `/first-frame` | JSON | GPT 首帧图 |
+| `POST /v1/single/style-image` | `style-image` | `gpt` | `/style-image/save` | JSON | GPT 定妆图 |
+| `POST /v1/single/model-image` | `model-image` | `gpt` | `/model-image/save` | JSON | GPT 模特图 |
 
 ### Platform 说明
 
@@ -230,7 +241,7 @@ PYTHONPATH=. uv run python scripts/submit_media_ai_model_images.py \
   --product-id <id> --dry-run
 ```
 
-> **路由逻辑**：API `/v1/jobs` 收到 caseFiles 后，`build_jobs()` 读取 `task.media-ai.json` 的 `kind` 和 `platform` 字段决定 platform——`video` → `jimeng`，`first-frame-image` + `platform="jimeng"` → `jimeng`，其他 → `gpt`。插件 claim 到 job 后读取 `job.platform` 选择对应 handler 执行。
+> **路由逻辑**：API `/v1/jobs` 收到 caseFiles 后，`build_jobs()` 读取 `task.media-ai.json` 的 `kind` 和 `platform` 字段决定 platform——`video` + `platform="jimeng"` → `jimeng`，`first-frame-image` + `platform="jimeng"` → `jimeng`，其他 → `gpt`。插件 claim 到 job 后读取 `job.platform` 选择对应 handler 执行。
 
 ## 核心文件
 
