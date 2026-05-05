@@ -203,7 +203,6 @@ async function runJimengImageJobHandler(job, serverUrl) {
     }
 
     console.log("[JimengImage] Saving results to bridge, images:", serializedImages.length);
-    console.log("[JimengImage] bridgeFetch call → url:", imgSrc.slice(0, 60), "responseType: blobBase64");
     console.log("[JimengImage] postJson call → url:", `${serverUrl}/v1/job/${encodeURIComponent(job.id)}/result`);
     console.log("[JimengImage] postJson payload images count:", serializedImages.length, "logs count:", logs.length);
     try {
