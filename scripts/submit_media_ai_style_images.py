@@ -267,10 +267,12 @@ def main() -> int:
                 print(f"[SKIP] {model_image_id} / {pose_id} {pose_name} already has style image.")
                 continue
 
+            job_id = f"{slugify(product_name)}-{product_id[:8]}__model-{model_image_id}__pose-{slugify(pose_name)}-{pose_id[:8]}"
             case_path, _ = client.build_style_image_task(
                 model_image_id=model_image_id,
                 pose_id=pose_id,
                 output_root=output_root,
+                job_id=job_id,
                 prompt=prompt,
                 force=True,
             )

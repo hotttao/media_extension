@@ -4,7 +4,7 @@ from local_bridge.api.schemas import (
     ModelImageCreateRequest,
     SingleJobCreatedResponse,
 )
-from local_bridge.infrastructure.media_ai_client import MediaAIClient
+from local_bridge.infrastructure.media_ai_client import MediaAIClient, slugify
 from loguru import logger
 
 router = APIRouter(tags=["single"])
@@ -19,31 +19,50 @@ def create_model_image(body: ModelImageCreateRequest, request: Request):
     cookie_header = request.headers.get("Cookie")
     client.resolve_cookie(cookie_header)
 
-    model_image_id = body.modelImageId
     product_id = body.productId
     ip_id = body.ipId
-    force = body.force
+    model_image_id = body.modelImageId
 
     if not model_image_id and not (product_id and ip_id):
         raise HTTPException(status_code=400, detail="modelImageId or (productId + ipId) is required")
 
-    if model_image_id and not (product_id and ip_id):
+    # Resolve product/IP from model_image or use provided values
+    resolved_product_id = str(product_id) if product_id else ""
+    resolved_ip_id = str(ip_id) if ip_id else ""
+
+    if model_image_id:
         model_image = client.fetch_model_image(str(model_image_id))
         if not model_image:
             raise HTTPException(status_code=404, detail=f"modelImage {model_image_id} not found")
-        product_id = model_image.get("productId")
-        ip_id = model_image.get("ipId")
-        if not product_id or not ip_id:
+        resolved_product_id = str(model_image.get("productId") or "")
+        resolved_ip_id = str(model_image.get("ipId") or "")
+        if not resolved_product_id or not resolved_ip_id:
             raise HTTPException(status_code=400, detail=f"modelImage {model_image_id} has no productId or ipId")
+        model_image_id = str(model_image_id)
+
+    product = client.fetch_product(resolved_product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail=f"product {resolved_product_id} not found")
+    product_name = str(product.get("name") or resolved_product_id)
+
+    ip = client.fetch_ip(resolved_ip_id)
+    if not ip:
+        raise HTTPException(status_code=404, detail=f"IP {resolved_ip_id} not found")
+
+    job_id = f"{slugify(product_name)}-{resolved_product_id[:8]}__model-{model_image_id}__ip-{resolved_ip_id}"
 
     prompt_path = Path("D:/Code/media/gpt_image2/prompts/03_模特图.md")
     prompt = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
 
+    store = request.app.state.store
+    output_root = store.output_root / job_id
+
     try:
         case_path, status = client.build_model_image_task(
-            product_id=str(product_id or ""),
-            ip_id=str(ip_id or ""),
-            output_root=Path("runs"),
+            product_id=resolved_product_id,
+            ip_id=resolved_ip_id,
+            output_root=output_root,
+            job_id=job_id,
             prompt=prompt,
             force=force,
         )
@@ -67,7 +86,6 @@ def create_model_image(body: ModelImageCreateRequest, request: Request):
             message="Dry-run: task built but not enqueued",
         )
 
-    store = request.app.state.store
     jobs = store.add_jobs([case_path])
     job = jobs[0]
     return SingleJobCreatedResponse(

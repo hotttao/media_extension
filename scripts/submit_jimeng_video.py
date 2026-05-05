@@ -127,11 +127,12 @@ def main() -> int:
             pass  # No automatic pose matching for now
 
         # Build task directory
-        task_dir = output_root / (
-            f"jimeng-video-{first_frame_id[:8]}"
-        )
-        assets_dir = task_dir / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
+        job_id = f"jimeng-video-{first_frame_id[:8]}"
+        task_dir = output_root / job_id
+        input_dir = task_dir / "input"
+        assets_dir = input_dir / "assets"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        input_dir.mkdir(parents=True, exist_ok=True)
 
         # Download first frame image
         media_url = resolve_media_url(client.media_base_url, first_frame_url)
@@ -155,14 +156,14 @@ def main() -> int:
         lines = [
             f"# 即梦视频生成 / {product_name}",
             "",
-            f"[首帧图]({first_frame_path.relative_to(task_dir).as_posix()})",
+            f"[首帧图]({first_frame_path.relative_to(input_dir).as_posix()})",
             "",
             f"**动作描述**: {movement_display}",
             "",
             prompt,
             "",
         ]
-        case_path = task_dir / "task.md"
+        case_path = input_dir / "task.md"
         case_path.write_text("\n".join(lines), encoding="utf-8")
 
         # Write .media-ai.json sidecar (kind="video" + platform="jimeng")

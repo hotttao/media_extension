@@ -4,6 +4,7 @@ from local_bridge.api.schemas import (
     StyleImageCreateRequest,
     SingleJobCreatedResponse,
 )
+from local_bridge.infrastructure.media_ai_client import MediaAIClient, slugify
 from loguru import logger
 
 router = APIRouter(tags=["single"])
@@ -26,14 +27,35 @@ def create_style_image(body: StyleImageCreateRequest, request: Request):
     if not model_image_id or not pose_id:
         raise HTTPException(status_code=400, detail="modelImageId and poseId are required")
 
+    model_image_id_str = str(model_image_id)
+    pose_id_str = str(pose_id)
+
+    # Fetch metadata for job_id computation
+    model_image = client.fetch_model_image(model_image_id_str)
+    if not model_image:
+        raise HTTPException(status_code=404, detail=f"model image {model_image_id} not found")
+    product_id = str(model_image.get("productId") or "")
+    product_name = str(model_image.get("productName") or product_id)
+
+    pose = client.fetch_pose(pose_id_str)
+    if not pose:
+        raise HTTPException(status_code=404, detail=f"pose {pose_id} not found")
+    pose_name = str(pose.get("name") or pose_id)
+
+    job_id = f"{slugify(product_name)}-{product_id[:8]}__model-{model_image_id_str}__pose-{slugify(pose_name)}-{pose_id_str[:8]}"
+
     prompt_path = Path("D:/Code/media/gpt_image2/prompts/04_定妆图.md")
     prompt = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
 
+    store = request.app.state.store
+    output_root = store.output_root / job_id
+
     try:
         case_path, status = client.build_style_image_task(
-            model_image_id=str(model_image_id),
-            pose_id=str(pose_id),
-            output_root=Path("runs"),
+            model_image_id=model_image_id_str,
+            pose_id=pose_id_str,
+            output_root=output_root,
+            job_id=job_id,
             prompt=prompt,
             force=force,
         )
@@ -57,7 +79,6 @@ def create_style_image(body: StyleImageCreateRequest, request: Request):
             message="Dry-run: task built but not enqueued",
         )
 
-    store = request.app.state.store
     jobs = store.add_jobs([case_path])
     job = jobs[0]
     return SingleJobCreatedResponse(

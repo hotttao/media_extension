@@ -199,9 +199,12 @@ def main() -> int:
                 ]
                 if pose_id:
                     dir_parts.append(f"pose-{slugify(pose_name)}-{pose_id[:8]}")
-                task_dir = output_root / "__".join(dir_parts)
-                assets_dir = task_dir / "assets"
-                assets_dir.mkdir(parents=True, exist_ok=True)
+                job_id = "__".join(dir_parts)
+                task_dir = output_root / job_id
+                input_dir = task_dir / "input"
+                assets_dir = input_dir / "assets"
+                task_dir.mkdir(parents=True, exist_ok=True)
+                input_dir.mkdir(parents=True, exist_ok=True)
 
                 # Download 3 reference images
                 ip_media_url = resolve_media_url(client.media_base_url, str(ip_full_body_url))
@@ -231,14 +234,14 @@ def main() -> int:
                 lines = [
                     f"# {product_name} / jimeng / {scene_name_val}",
                     "",
-                    f"[图片一：人物]({ip_path.relative_to(task_dir).as_posix()})",
-                    f"[图片二：服装]({main_path.relative_to(task_dir).as_posix()})",
-                    f"[图片三：场景]({scene_path.relative_to(task_dir).as_posix()})",
+                    f"[图片一：人物]({ip_path.relative_to(input_dir).as_posix()})",
+                    f"[图片二：服装]({main_path.relative_to(input_dir).as_posix()})",
+                    f"[图片三：场景]({scene_path.relative_to(input_dir).as_posix()})",
                     "",
                     effective_prompt,
                     "",
                 ]
-                case_path = task_dir / "task.md"
+                case_path = input_dir / "task.md"
                 case_path.write_text("\n".join(lines), encoding="utf-8")
 
                 # Write .media-ai.json sidecar (kind="first-frame-image" per business semantics)

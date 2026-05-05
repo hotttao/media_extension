@@ -156,7 +156,26 @@
       "Bash(python3 -c \"import sys,json; [print\\(t[''''targetId''''],t[''''url'''']\\) for t in json.load\\(sys.stdin\\) if ''''jimeng'''' in t.get\\(''''url'''',''''''''\\)]\")",
       "Bash(node -e \"require\\(''''fs''''\\).readFileSync\\(''''extension/jimeng-steps.js'''',''''utf8''''\\)\")",
       "Bash(command -v ast-grep)",
-      "Bash(curl -s -X POST \"http://localhost:3456/eval?target=554BCA5B822114B7D4163CB7C349A81B\" -d 'eval\\(\"\"\\(function\\(\\){window.__y=55}\\)\\(\\)\"\"\\)')"
+      "Bash(curl -s -X POST \"http://localhost:3456/eval?target=554BCA5B822114B7D4163CB7C349A81B\" -d 'eval\\(\"\"\\(function\\(\\){window.__y=55}\\)\\(\\)\"\"\\)')",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_business_logic.py tests/test_data_structures.py -v)",
+      "Bash(PYTHONPATH=. uv run --with pytest python -m pytest tests/test_business_logic.py tests/test_data_structures.py -v)",
+      "Bash(PYTHONPATH=. uv run --with pytest python -m pytest tests/test_http_layer.py -v)",
+      "Bash(PYTHONPATH=. uv run --with pytest python -m pytest tests/ -v)",
+      "Bash(PYTHONPATH=. uv run --with pytest python -m pytest tests/ -v --tb=no)",
+      "Bash(PYTHONPATH=. uv run --with pytest python -m pytest tests/ -q)",
+      "Bash(PYTHONPATH=. uv run --with pytest python -m pytest tests/test_http_layer.py tests/test_data_structures.py tests/test_business_logic.py -v --tb=short)",
+      "Bash(PYTHONPATH=. uv run --with pytest python -m pytest tests/test_http_layer.py::Test_save_media_ai_generated_image::test_first_frame_image_save -v --tb=short)",
+      "Bash(PYTHONPATH=. uv pip install loguru 2>&1)",
+      "Bash(uv add:*)",
+      "Bash(PYTHONPATH=. uv run --with pytest python -m pytest tests/ -v --tb=no -k \"not test_first_frame_image_save\")",
+      "Bash(E:/Program Files/Python/Python311/python.exe -m pip install loguru 2>&1)",
+      "Bash(PYTHONPATH=. uv run pytest tests/ -v --tb=short)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_http_layer.py::Test_save_media_ai_generated_image::test_first_frame_image_save -v --tb=long 2>&1)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_http_layer.py::Test_save_media_ai_generated_image::test_first_frame_image_save -v --tb=short 2>&1)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_http_layer.py -v --tb=short)",
+      "Bash(PYTHONPATH=. uv run pytest tests/ --tb=short)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_business_logic.py tests/test_file_processing.py tests/test_data_structures.py tests/test_http_layer.py --tb=short)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_http_layer.py tests/test_media_ai_client.py -v)"
     ]
   }
 }

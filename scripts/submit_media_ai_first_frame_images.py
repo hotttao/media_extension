@@ -401,10 +401,12 @@ def main() -> int:
                 print(f"[SKIP] {style_image_id} / {current_scene_id} {current_scene_name} already has first frame.")
                 continue
 
+            job_id = f"{slugify(product_name)}-{product_id[:8]}__style-{style_image_id}__scene-{slugify(current_scene_name)}-{current_scene_id[:8]}"
             case_path, _ = client.build_first_frame_task(
                 style_image_id=style_image_id,
                 scene_id=current_scene_id,
                 output_root=output_root,
+                job_id=job_id,
                 prompt=prompt,
                 force=True,
             )

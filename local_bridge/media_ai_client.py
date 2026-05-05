@@ -564,6 +564,7 @@ class MediaAIClient:
         product_id: str,
         ip_id: str,
         output_root: pathlib.Path,
+        job_id: str,
         prompt: str,
         force: bool = False,
     ) -> tuple[pathlib.Path | None, str]:
@@ -574,6 +575,8 @@ class MediaAIClient:
         - "ok" — task created
         - "exists" — already exists (and force=False)
         - "error" — failed
+
+        Directory structure: output_root/job_id/input/ and output/
         """
         cookie = self.resolve_cookie()
 
@@ -608,9 +611,11 @@ class MediaAIClient:
         if not product_id or not ip_id or not main_image_url or not ip_full_body_url:
             return (None, "error")
 
-        task_dir = output_root / f"{slugify(product_name)}-{product_id[:8]}__{slugify(ip_name)}-{ip_id[:8]}"
-        assets_dir = task_dir / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
+        task_dir = output_root / job_id
+        input_dir = task_dir / "input"
+        assets_dir = input_dir / "assets"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        input_dir.mkdir(parents=True, exist_ok=True)
 
         ip_url = resolve_media_url(self.media_base_url, str(ip_full_body_url))
         main_url = resolve_media_url(self.media_base_url, main_image_url)
@@ -624,13 +629,13 @@ class MediaAIClient:
         lines = [
             f"# {product_name} / {ip_name} 模特图",
             "",
-            f"[图片一：模特参考图]({ip_path.relative_to(task_dir).as_posix()})",
-            f"[图片二：服装主图]({main_path.relative_to(task_dir).as_posix()})",
+            f"[图片一：模特参考图]({ip_path.relative_to(input_dir).as_posix()})",
+            f"[图片二：服装主图]({main_path.relative_to(input_dir).as_posix()})",
             "",
             prompt,
             "",
         ]
-        case_path = task_dir / "task.md"
+        case_path = input_dir / "task.md"
         case_path.write_text("\n".join(lines), encoding="utf-8")
 
         sidecar: dict = {
@@ -655,10 +660,14 @@ class MediaAIClient:
         model_image_id: str,
         pose_id: str,
         output_root: pathlib.Path,
+        job_id: str,
         prompt: str,
         force: bool = False,
     ) -> tuple[pathlib.Path | None, str]:
-        """Build a style-image task. Returns (case_path, status)."""
+        """Build a style-image task. Returns (case_path, status).
+
+        Directory structure: output_root/job_id/input/ and output/
+        """
         cookie = self.resolve_cookie()
 
         model_image = self.fetch_model_image(model_image_id)
@@ -684,12 +693,11 @@ class MediaAIClient:
             if existing:
                 return (None, "exists")
 
-        task_dir = output_root / (
-            f"{slugify(product_name)}-{product_id[:8]}__"
-            f"model-{model_image_id_str[:8]}__pose-{slugify(pose_name)}-{pose_id_str[:8]}"
-        )
-        assets_dir = task_dir / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
+        task_dir = output_root / job_id
+        input_dir = task_dir / "input"
+        assets_dir = input_dir / "assets"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        input_dir.mkdir(parents=True, exist_ok=True)
 
         model_media_url = resolve_media_url(self.media_base_url, model_url)
         pose_media_url = resolve_media_url(self.media_base_url, pose_url)
@@ -702,13 +710,13 @@ class MediaAIClient:
         lines = [
             f"# {product_name} / {pose_name} 定妆图",
             "",
-            f"[图片一：换装好的模特图]({model_path.relative_to(task_dir).as_posix()})",
-            f"[图片二：姿势参考图]({pose_path.relative_to(task_dir).as_posix()})",
+            f"[图片一：换装好的模特图]({model_path.relative_to(input_dir).as_posix()})",
+            f"[图片二：姿势参考图]({pose_path.relative_to(input_dir).as_posix()})",
             "",
             prompt,
             "",
         ]
-        case_path = task_dir / "task.md"
+        case_path = input_dir / "task.md"
         case_path.write_text("\n".join(lines), encoding="utf-8")
 
         sidecar: dict = {
@@ -736,10 +744,14 @@ class MediaAIClient:
         style_image_id: str,
         scene_id: str,
         output_root: pathlib.Path,
+        job_id: str,
         prompt: str,
         force: bool = False,
     ) -> tuple[pathlib.Path | None, str]:
-        """Build a first-frame-image task. Returns (case_path, status)."""
+        """Build a first-frame-image task. Returns (case_path, status).
+
+        Directory structure: output_root/job_id/input/ and output/
+        """
         cookie = self.resolve_cookie()
 
         style_image = self.fetch_style_image(style_image_id)
@@ -766,13 +778,11 @@ class MediaAIClient:
             if existing:
                 return (None, "exists")
 
-        task_dir = output_root / (
-            f"{slugify(product_name)}-{product_id[:8]}__"
-            f"style-{style_image_id_str[:8]}__"
-            f"scene-{slugify(scene_name_val)}-{scene_id_key[:8]}"
-        )
-        assets_dir = task_dir / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
+        task_dir = output_root / job_id
+        input_dir = task_dir / "input"
+        assets_dir = input_dir / "assets"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        input_dir.mkdir(parents=True, exist_ok=True)
 
         style_media_url = resolve_media_url(self.media_base_url, style_image_url)
         scene_media_url = resolve_media_url(self.media_base_url, scene_url_val)
@@ -785,13 +795,13 @@ class MediaAIClient:
         lines = [
             f"# {product_name} / style-{style_image_id_str[:8]} / {scene_name_val} 首帧图",
             "",
-            f"[图片一：模特定妆照]({style_path.relative_to(task_dir).as_posix()})",
-            f"[图片二：场景]({scene_path.relative_to(task_dir).as_posix()})",
+            f"[图片一：模特定妆照]({style_path.relative_to(input_dir).as_posix()})",
+            f"[图片二：场景]({scene_path.relative_to(input_dir).as_posix()})",
             "",
             prompt,
             "",
         ]
-        case_path = task_dir / "task.md"
+        case_path = input_dir / "task.md"
         case_path.write_text("\n".join(lines), encoding="utf-8")
 
         sidecar: dict = {

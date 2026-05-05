@@ -192,12 +192,12 @@ def load_case_file(case_path: pathlib.Path) -> tuple[str, list[dict[str, Any]]]:
 # ---------------------------------------------------------------------------
 def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_index: int = 1) -> list[Job]:
     jobs: list[Job] = []
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    for index, case_path in enumerate(case_paths, start=start_index):
+    for case_path in case_paths:
+        # job_id is the directory name (submit scripts write to output_root/job_id/input/task.md)
+        job_id = case_path.parent.parent.name  # case_path = output_root/job_id/input/task.md
+        case_file = case_path.resolve()
         prompt, assets = load_case_file(case_path)
         media_ai = load_media_ai_sidecar(case_path)
-        job_id = f"{index:03d}-{sanitize_slug(case_path.stem)}-{timestamp}"
-        job_output_dir = output_root / job_id
 
         platform: str | None = None
         target_url: str | None = None
@@ -216,10 +216,10 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
         jobs.append(
             Job(
                 id=job_id,
-                case_file=case_path.resolve(),
+                case_file=case_file,
                 prompt=prompt,
                 assets=assets,
-                output_dir=job_output_dir,
+                output_dir=(output_root / job_id / "output").resolve(),
                 media_ai=media_ai,
                 platform=platform,
                 target_url=target_url,

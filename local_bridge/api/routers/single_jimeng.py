@@ -72,11 +72,13 @@ def create_jimeng_image(body: JimengImageCreateRequest, request: Request):
         main_image = sorted(image_items, key=lambda x: int(x.get("order") or 999999))[0]
     main_image_url = str(main_image.get("url") or "")
 
-    task_dir = request.app.state.store.output_root / (
+    job_id = (
         f"jimeng-img-{slugify(product_name)}-{resolved_product_id[:8]}__"
         f"style-{style_image_id[:8]}__scene-{slugify(resolved_scene_name)}-{resolved_scene_id[:8] if resolved_scene_id else 'none'}"
     )
-    assets_dir = task_dir / "assets"
+    task_dir = request.app.state.store.output_root / job_id
+    input_dir = task_dir / "input"
+    assets_dir = input_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
 
     ip_media_url = resolve_media_url(client.media_base_url, str(ip_full_body_url))
@@ -103,15 +105,15 @@ def create_jimeng_image(body: JimengImageCreateRequest, request: Request):
         prompt_path = Path("D:/Code/media/gpt_image2/prompts/08_即梦文生图")
         prompt_text = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
 
-    case_path = task_dir / "task.md"
+    case_path = input_dir / "task.md"
     lines = [
         f"# {product_name} / jimeng / {resolved_scene_name} 即梦生图",
         "",
-        f"[图片一：人物]({ip_path.relative_to(task_dir).as_posix()})",
-        f"[图片二：服装]({main_path.relative_to(task_dir).as_posix()})",
+        f"[图片一：人物]({ip_path.relative_to(input_dir).as_posix()})",
+        f"[图片二：服装]({main_path.relative_to(input_dir).as_posix()})",
     ]
     if scene_media_url:
-        lines.append(f"[图片三：场景]({scene_path.relative_to(task_dir).as_posix()})")
+        lines.append(f"[图片三：场景]({scene_path.relative_to(input_dir).as_posix()})")
     lines.extend(["", prompt_text, ""])
     case_path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -187,12 +189,14 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
         if first_frame:
             first_frame_url = str(first_frame.get("url") or "")
 
-    task_dir = request.app.state.store.output_root / (
+    job_id = (
         f"jimeng-vid-{resolved_product_id[:8]}"
         f"{f'-ip-{resolved_ip_id[:8]}' if resolved_ip_id else ''}"
         f"{f'-ff-{resolved_first_frame_id[:8]}' if resolved_first_frame_id else ''}"
     )
-    assets_dir = task_dir / "assets"
+    task_dir = request.app.state.store.output_root / job_id
+    input_dir = task_dir / "input"
+    assets_dir = input_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
 
     if first_frame_url:
@@ -209,10 +213,10 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
         prompt_path = Path("D:/Code/media/gpt_image2/prompts/09_即梦文生视频")
         prompt_text = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
 
-    case_path = task_dir / "task.md"
+    case_path = input_dir / "task.md"
     lines = [f"# jimeng video / product {resolved_product_id}"]
     if first_frame_path and first_frame_path.exists():
-        lines.extend(["", f"[首帧图]({first_frame_path.relative_to(task_dir).as_posix()})", ""])
+        lines.extend(["", f"[首帧图]({first_frame_path.relative_to(input_dir).as_posix()})", ""])
     lines.extend(["", prompt_text, ""])
     case_path.write_text("\n".join(lines), encoding="utf-8")
 

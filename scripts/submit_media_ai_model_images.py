@@ -171,10 +171,12 @@ def main() -> int:
                 )
                 continue
 
+            job_id = f"{slugify(product_name)}-{product_id[:8]}__{slugify(ip_name)}-{ip_id[:8]}"
             case_path, _ = client.build_model_image_task(
                 product_id=str(product.get("id") or ""),
                 ip_id=str(ip.get("id") or ""),
                 output_root=output_root,
+                job_id=job_id,
                 prompt=prompt,
                 force=True,
             )
