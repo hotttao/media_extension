@@ -356,12 +356,14 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
         target_url: str | None = None
         if media_ai:
             kind = media_ai.get("kind") or ""
-            if kind in ("jimeng-image", "first-frame-image", "style-image", "model-image"):
-                platform = "jimeng_image"
+            if kind == "jimeng-image":
+                platform = "jimeng"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
             elif kind == "jimeng-video":
-                platform = "jimeng_video"
+                platform = "jimeng"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
+            elif kind in ("first-frame-image", "style-image", "model-image"):
+                platform = "gpt"
 
         jobs.append(
             Job(
@@ -973,10 +975,10 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
             "imageUrl": image_url,
         }
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
-    elif kind in ("jimeng_image",):
+    elif kind == "jimeng-image":
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
         if not ip_id:
-            raise RuntimeError("jimeng_image sidecar requires ipId.")
+            raise RuntimeError("jimeng-image sidecar requires ipId.")
         save_body = {"ipId": ip_id, "imageUrl": image_url}
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     else:
@@ -1021,7 +1023,7 @@ def save_media_ai_generated_video(job, output_path: pathlib.Path) -> dict[str, A
 
     save_url = f"{base_url}/api/products/{product_id}/videos"
     save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
-    return {"kind": "jimeng_video", "uploaded": upload_result, "saved": save_result}
+    return {"kind": "video", "uploaded": upload_result, "saved": save_result}
 ```
 
 - [ ] **Step 2: 运行导入测试**

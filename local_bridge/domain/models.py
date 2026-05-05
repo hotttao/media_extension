@@ -204,10 +204,10 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
         if media_ai:
             kind = media_ai.get("kind") or ""
             if kind == "jimeng-image":
-                platform = "jimeng_image"
+                platform = "jimeng"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
             elif kind == "jimeng-video":
-                platform = "jimeng_video"
+                platform = "jimeng"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
             elif kind in ("first-frame-image", "style-image", "model-image"):
                 platform = "gpt"

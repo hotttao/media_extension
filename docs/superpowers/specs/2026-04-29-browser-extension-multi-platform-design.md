@@ -20,7 +20,7 @@
 ```json
 {
   "id": "job-001",
-  "platform": "jimeng_image",
+  "platform": "jimeng",
   "targetUrl": "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0",
   "prompt": "完整提示词",
   "assets": [{"index": 0, "label": "styleImage", "name": "xxx.jpg", "url": "..."}],
@@ -30,7 +30,7 @@
 }
 ```
 
-- `platform`：平台标识。`gpt` 或 absent 表示 GPT 生图；`jimeng_image` 表示即梦生图；`jimeng_video` 表示即梦生视频
+- `platform`：平台标识。`gpt` 或 absent 表示 GPT 生图；`jimeng` 表示即梦生图/视频（图片/视频模式由 targetUrl 区分）
 - `targetUrl`：Extension 应打开的目标页面 URL，由 `local_bridge` 根据 platform 生成，不再 hardcode 在插件中
 - GPT job 保持原有格式（无 `platform` 字段或 `platform: "gpt"`），Extension 现有逻辑不变
 
@@ -39,7 +39,7 @@
 `local_bridge` 在生成即梦 job 时：
 1. 根据 `styleImageId` 查询 `style_image` 表，得到 `productId` + `ipId`
 2. 查询 `scene` 表得到场景信息
-3. 根据 `platform` 类型（`jimeng_image` / `jimeng_video`）使用对应的 prompt 模板
+3. 根据 `platform` 类型（`jimeng` / `gpt`）使用对应的 prompt 模板
 4. `assets` 数组格式与 GPT job 完全一致（Extension 已知如何处理）
 5. `targetUrl` 根据 platform 设置为对应的即梦页面 URL
 
@@ -103,12 +103,11 @@ Content script 收到 job 后，根据 `job.platform` 选择对应的 handler。
 | `job.platform` | Handler |
 |---|---|
 | `undefined` / `"gpt"` | `runGptJob`（现有逻辑，文件名改为 `handlers/gpt.js`） |
-| `"jimeng_image"` | `runJimengImageJob`（新增，文件名 `handlers/jimeng_image.js`） |
-| `"jimeng_video"` | `runJimengVideoJob`（新增，文件名 `handlers/jimeng_video.js`） |
+| `"jimeng"` | `runJimengImageJob`（统一 handler，图片/视频模式由 targetUrl 区分） |
 
 各 handler 对外接口一致：接收 job 对象，执行页面操作，最后都调用 `serializeImages` + `postJson(..., /result)` 上报结果。
 
-### 3.2 即梦生图 Handler（jimeng_image）
+### 3.2 即梦 Handler（jimeng）
 
 流程：
 1. 打开即梦页面（`targetUrl`），等待页面加载
@@ -121,7 +120,7 @@ Content script 收到 job 后，根据 `job.platform` 选择对应的 handler。
 8. 序列化所有生成的图片（最多4张）
 9. 调用 `postJson(..., /result)` 上报结果
 
-### 3.3 即梦生视频 Handler（jimeng_video）
+### 3.3 即梦视频 Handler（jimeng video mode）
 
 流程：
 1. 打开即梦页面（`targetUrl`），等待页面加载
@@ -228,8 +227,8 @@ extension/
   content-script.js      # 拆分为入口 + handlers/
     handlers/
       gpt.js             # 现有逻辑移入
-      jimeng_image.js    # 新增
-      jimeng_video.js    # 新增
+      jimeng-image.js    # 即梦图片 handler
+      jimeng-video.js    # 即梦视频 handler
 
 local_bridge/
   server.py              # Job.to_public_dict() 增加 platform/targetUrl

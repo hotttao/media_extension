@@ -75,7 +75,7 @@ class Test_build_jobs:
         job = jobs[0]
         assert job.prompt == "generate something"
         assert job.status == "pending"
-        assert job.platform == "jimeng_image"
+        assert job.platform == "jimeng"
         assert job.target_url == "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
 
     def test_builds_multiple_jobs(self, tmp_path: pathlib.Path) -> None:
@@ -110,7 +110,7 @@ class Test_build_jobs:
 
         jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")
         assert len(jobs) == 1
-        assert jobs[0].platform == "jimeng_video"
+        assert jobs[0].platform == "jimeng"
         assert jobs[0].target_url == "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
 
     def test_job_id_format(self, tmp_path: pathlib.Path) -> None:
@@ -136,7 +136,7 @@ class Test_build_jobs:
         case_dir.mkdir()
         (case_dir / "task.md").write_text("test", encoding="utf-8")
         (case_dir / "task.media-ai.json").write_text(
-            '{"kind": "jimeng_image", "productId": "p", "ipId": "i", "styleImageId": "s1"}',
+            '{"kind": "jimeng-image", "productId": "p", "ipId": "i", "styleImageId": "s1"}',
             encoding="utf-8",
         )
 
@@ -193,7 +193,7 @@ class Test_build_jobs:
         (case_dir / "task.md").write_text("prompt", encoding="utf-8")
         # Write sidecar with wrong name (old buggy format)
         (case_dir / ".media-ai.json").write_text(
-            '{"kind": "jimeng_image", "productId": "should_not_be_read"}',
+            '{"kind": "jimeng-image", "productId": "should_not_be_read"}',
             encoding="utf-8",
         )
         jobs = build_jobs([case_dir / "task.md"], tmp_path / "output")

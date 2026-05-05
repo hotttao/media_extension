@@ -52,10 +52,10 @@ class Test_Job_to_public_dict:
             prompt="",
             assets=[],
             output_dir=pathlib.Path("runs/003"),
-            platform="jimeng_image",
+            platform="jimeng",
         )
         result = job.to_public_dict("http://localhost:8765")
-        assert result["platform"] == "jimeng_image"
+        assert result["platform"] == "jimeng"
 
     def test_platform_absent_when_none(self) -> None:
         job = Job(
@@ -75,7 +75,7 @@ class Test_Job_to_public_dict:
             prompt="",
             assets=[],
             output_dir=pathlib.Path("runs/005"),
-            platform="jimeng_image",
+            platform="jimeng",
             target_url="https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0",
         )
         result = job.to_public_dict("http://localhost:8765")
@@ -123,24 +123,24 @@ class Test_public_media_ai:
         assert public_media_ai(None) is None
 
     def test_strips_cookie(self) -> None:
-        sidecar = {"kind": "jimeng_image", "productId": "p1", "cookie": "secret"}
+        sidecar = {"kind": "jimeng-image", "productId": "p1", "cookie": "secret"}
         result = public_media_ai(sidecar)
         # cookie should be redacted, not removed
         assert result["cookie"] == "<redacted>"
-        assert result["kind"] == "jimeng_image"
+        assert result["kind"] == "jimeng-image"
         assert result["productId"] == "p1"
 
     def test_keeps_non_cookie_fields(self) -> None:
-        sidecar = {"kind": "jimeng_video", "productId": "p2", "ipId": "i1", "movement": "转身"}
+        sidecar = {"kind": "video", "productId": "p2", "ipId": "i1", "movement": "转身"}
         result = public_media_ai(sidecar)
-        assert result["kind"] == "jimeng_video"
+        assert result["kind"] == "video"
         assert result["productId"] == "p2"
         assert result["ipId"] == "i1"
         assert result["movement"] == "转身"
 
     def test_style_image_id_and_scene_id_preserved(self) -> None:
         sidecar = {
-            "kind": "jimeng_image",
+            "kind": "jimeng-image",
             "styleImageId": "s1",
             "sceneId": "scene1",
             "productId": "p1",

@@ -141,10 +141,10 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
             "generationPath": "gpt",
         }
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
-    elif kind in ("jimeng_image",):
+    elif kind == "jimeng-image":
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
         if not ip_id:
-            raise RuntimeError("jimeng_image sidecar requires ipId.")
+            raise RuntimeError("jimeng-image sidecar requires ipId.")
         save_body = {"ipId": ip_id, "imageUrl": image_url, "generationPath": "gpt"}
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     else:
@@ -191,4 +191,4 @@ def save_media_ai_generated_video(job, output_path: pathlib.Path) -> dict[str, A
 
     save_url = f"{base_url}/api/products/{product_id}/videos"
     save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
-    return {"kind": "jimeng_video", "uploaded": upload_result, "saved": save_result}
+    return {"kind": "video", "uploaded": upload_result, "saved": save_result}

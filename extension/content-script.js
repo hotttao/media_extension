@@ -388,10 +388,8 @@ async function runJob(job, serverUrl) {
   const platform = job.platform || "gpt";
   if (platform === "gpt") {
     await runGptJobHandler(job, serverUrl);
-  } else if (platform === "jimeng_image") {
+  } else if (platform === "jimeng") {
     await runJimengImageJobHandler(job, serverUrl);
-  } else if (platform === "jimeng_video") {
-    await runJimengVideoJobHandler(job, serverUrl);
   } else {
     throw new Error(`Unknown platform: ${platform}`);
   }
@@ -1182,8 +1180,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 async function runTestStep(platform, step) {
-  if (platform !== "jimeng_image") {
-    return "ERROR: Only jimeng_image supported for now";
+  if (platform !== "jimeng") {
+    return "ERROR: Only jimeng supported for now";
   }
 
   // Import shared step functions

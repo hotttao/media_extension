@@ -311,12 +311,9 @@ async function runJob(job, serverUrl) {
   if (platform === "gpt") {
     const { runGptJob } = require("./content-handlers/gpt.js");
     await runGptJob(job, serverUrl);
-  } else if (platform === "jimeng_image") {
+  } else if (platform === "jimeng") {
     const { runJimengImageJob } = require("./content-handlers/jimeng-image.js");
     await runJimengImageJob(job, serverUrl);
-  } else if (platform === "jimeng_video") {
-    const { runJimengVideoJob } = require("./content-handlers/jimeng-video.js");
-    await runJimengVideoJob(job, serverUrl);
   } else {
     throw new Error(`Unknown platform: ${platform}`);
   }
@@ -354,7 +351,7 @@ git commit -m "refactor: extract GPT handler to content-handlers/gpt.js"
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 
 async function runJimengImageJob(job, serverUrl) {
-  // job.platform === "jimeng_image"
+  // job.platform === "jimeng"
   // job.targetUrl: https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0
   // job.prompt: 完整提示词
   // job.assets: 三张参考图 [人物, 服装, 场景]
@@ -548,7 +545,7 @@ git commit -m "feat: add Jimeng image generation handler"
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 
 async function runJimengVideoJob(job, serverUrl) {
-  // job.platform === "jimeng_video"
+  // job.platform === "jimeng" (video mode)
   // job.targetUrl: https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0
   // job.assets: [首帧图]
   // job.movement 或 job.movementId: 动作描述
@@ -834,8 +831,8 @@ git commit -m "feat: support targetUrl-based tab opening and cancelAll"
 ```javascript
 const PLATFORMS = [
   { id: "gpt", name: "ChatGPT 图片", matches: ["chatgpt.com", "openai.com"] },
-  { id: "jimeng_image", name: "即梦图片", matches: ["jimeng.jianying.com"] },
-  { id: "jimeng_video", name: "即梦视频", matches: ["jimeng.jianying.com"] },
+  { id: "jimeng", name: "即梦图片", matches: ["jimeng.jianying.com"] },
+  { id: "jimeng", name: "即梦视频", matches: ["jimeng.jianying.com"] },
 ];
 
 const controllerState = {};
@@ -896,7 +893,7 @@ function getServerUrl() {
 async function refresh() {
   const response = await chrome.runtime.sendMessage({ type: "popup:getState" });
   if (response.state) {
-    // response.state 格式: { gpt: {...}, jimeng_image: {...}, jimeng_video: {...} }
+    // response.state 格式: { gpt: {...}, jimeng: {...} }
     Object.assign(controllerState, response.state);
   }
   render();

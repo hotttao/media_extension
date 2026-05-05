@@ -203,7 +203,7 @@ class Test_save_media_ai_generated_image:
             output_dir=tmp_path / "output",
             media_ai={
                 "baseUrl": MEDIA_AI_BASE_URL,
-                "kind": "jimeng_image",
+                "kind": "jimeng-image",
                 "productId": "prod_test_001",
                 "ipId": "ip_test_001",
                 "cookie": cookie,
@@ -213,7 +213,7 @@ class Test_save_media_ai_generated_image:
         try:
             result = save_media_ai_generated_image(job, img_path)
             assert result is not None
-            assert result["kind"] == "jimeng_image"
+            assert result["kind"] == "jimeng-image"
             assert "uploaded" in result
             assert "saved" in result
         except RuntimeError as e:
@@ -239,7 +239,7 @@ class Test_save_media_ai_generated_video:
             output_dir=tmp_path / "output",
             media_ai={
                 "baseUrl": MEDIA_AI_BASE_URL,
-                "kind": "jimeng_video",
+                "kind": "video",
                 "productId": "prod_test_001",
                 "ipId": "ip_test_001",
                 "firstFrameId": "ff_test_001",
@@ -251,7 +251,7 @@ class Test_save_media_ai_generated_video:
         try:
             result = save_media_ai_generated_video(job, video_path)
             assert result is not None
-            assert result["kind"] == "jimeng_video"
+            assert result["kind"] == "video"
             assert "uploaded" in result
         except RuntimeError as e:
             # Save may fail with 4xx if product doesn't exist — still validates upload

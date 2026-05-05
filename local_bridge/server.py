@@ -368,10 +368,10 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
         if media_ai:
             kind = media_ai.get("kind") or ""
             if kind == "jimeng-image":
-                platform = "jimeng_image"
+                platform = "jimeng"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=image&workspace=0"
             elif kind == "jimeng-video":
-                platform = "jimeng_video"
+                platform = "jimeng"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
             elif kind in ("first-frame-image", "style-image", "model-image"):
                 platform = "gpt"
@@ -506,22 +506,12 @@ def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[s
         }
         save_url = f"{base_url}/api/products/{product_id}/style-image/save"
     elif kind == "first-frame-image":
-        style_image_id = ensure_text(job.media_ai.get("styleImageId") or "")
-        if not style_image_id:
-            raise RuntimeError("Media AI first-frame sidecar requires styleImageId.")
-        save_body = {
-            "styleImageId": style_image_id,
-            "sceneId": job.media_ai.get("sceneId"),
-            "composition": job.media_ai.get("composition"),
-            "imageUrl": image_url,
-            "generationPath": "gpt",
-        }
-        save_url = f"{base_url}/api/products/{product_id}/first-frame"
-    elif kind in ("jimeng_image",):
+        return save_media_ai_first_frame_upload(job, output_path)
+    elif kind == "jimeng-image":
         # Jimeng image generation: save with ipId to first_frames table
         ip_id = ensure_text(job.media_ai.get("ipId") or "")
         if not ip_id:
-            raise RuntimeError("Media AI jimeng_image sidecar requires ipId.")
+            raise RuntimeError("Media AI jimeng-image sidecar requires ipId.")
         save_body = {"ipId": ip_id, "imageUrl": image_url, "generationPath": "gpt"}
         save_url = f"{base_url}/api/products/{product_id}/first-frame"
     else:
@@ -537,6 +527,62 @@ def save_media_ai_generated_image(job: Job, output_path: pathlib.Path) -> dict[s
         "uploaded": upload_result,
         "saved": save_result,
     }
+
+
+def save_media_ai_first_frame_upload(job: Job, output_path: pathlib.Path) -> dict[str, Any] | None:
+    """Upload and save a first-frame image using /first-frame-upload (combined upload + save)."""
+    if not job.media_ai:
+        return None
+
+    base_url = ensure_text(job.media_ai.get("baseUrl") or "http://localhost:3000").rstrip("/")
+    cookie = ensure_text(job.media_ai.get("cookie") or os.environ.get("MEDIA_AI_COOKIE") or "") or None
+    product_id = ensure_text(job.media_ai.get("productId") or "")
+    if not product_id:
+        raise RuntimeError("Media AI sidecar requires productId.")
+
+    style_image_id = ensure_text(job.media_ai.get("styleImageId") or "")
+    scene_id = ensure_text(job.media_ai.get("sceneId") or "")
+    composition = ensure_text(job.media_ai.get("composition") or "")
+    prompt = ensure_text(job.media_ai.get("productName") or "")
+
+    # Use multipart upload like /api/upload — field name is "files" not "file"
+    boundary = f"----codex-{uuid.uuid4().hex}"
+    file_bytes = output_path.read_bytes()
+    mime_type = guess_mime_type(output_path)
+    fields = [
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"{output_path.name}\"\r\nContent-Type: {mime_type}\r\n\r\n").encode("utf-8"),
+        file_bytes,
+        f"\r\n--{boundary}--\r\n".encode("utf-8"),
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"styleImageId\"\r\n\r\n{style_image_id}\r\n").encode("utf-8"),
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"sceneId\"\r\n\r\n{scene_id}\r\n").encode("utf-8"),
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"composition\"\r\n\r\n{composition}\r\n").encode("utf-8"),
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\n{prompt}\r\n").encode("utf-8"),
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"generationPath\"\r\n\r\ngpt\r\n").encode("utf-8"),
+    ]
+    body = b"".join(fields)
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(body)),
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+
+    url = f"{base_url}/api/products/{product_id}/first-frame-upload"
+    log_info("[/first-frame-upload] POST %s file=%s size=%s", url, output_path.name, len(file_bytes))
+    request = Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urlopen(request, timeout=120) as response:
+            raw = response.read().decode("utf-8")
+            result = json.loads(raw) if raw else {}
+            log_info("[/first-frame-upload] success: %s", str(result)[:200])
+            return result
+    except HTTPError as error:
+        raw = error.read().decode("utf-8", errors="replace")
+        log_error("[/first-frame-upload] HTTP %s: %s", error.code, raw[:200])
+        raise RuntimeError(f"POST {url} failed with HTTP {error.code}: {raw}") from error
+    except URLError as error:
+        raise RuntimeError(f"POST {url} failed: {error.reason}") from error
 
 
 def save_media_ai_generated_video(job: Job, output_path: pathlib.Path) -> dict[str, Any] | None:
@@ -577,7 +623,7 @@ def save_media_ai_generated_video(job: Job, output_path: pathlib.Path) -> dict[s
     save_url = f"{base_url}/api/products/{product_id}/videos"
     save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
     return {
-        "kind": "jimeng_video",
+        "kind": "video",
         "uploaded": upload_result,
         "saved": save_result,
     }
@@ -1488,7 +1534,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
             # Write .media-ai.json sidecar (kebab-case kind)
             sidecar: dict[str, Any] = {
-                "kind": "jimeng-video",
+                "kind": "video",
                 "baseUrl": client.base_url,
                 "productId": resolved_product_id,
                 "uploadSubDir": "videos",

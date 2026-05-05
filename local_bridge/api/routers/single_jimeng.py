@@ -216,7 +216,7 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
     case_path.write_text("\n".join(lines), encoding="utf-8")
 
     sidecar: dict = {
-        "kind": "jimeng-video",
+        "kind": "video",
         "baseUrl": client.base_url,
         "productId": resolved_product_id,
         "ipId": resolved_ip_id or None,

@@ -1,7 +1,7 @@
 const PLATFORMS = [
   { id: "gpt", name: "ChatGPT 图片" },
-  { id: "jimeng_image", name: "即梦图片" },
-  { id: "jimeng_video", name: "即梦视频" },
+  { id: "jimeng", name: "即梦图片" },
+  { id: "jimeng", name: "即梦视频" },
 ];
 
 const controllerState = {};
@@ -138,7 +138,7 @@ function render() {
           // Construct normalized job for content handler
           normalizedJob = {
             id: job.id,
-            platform: ma.kind === "jimeng-video" ? "jimeng_video" : "jimeng_image",
+            platform: "jimeng",
             targetUrl,
             prompt: ma.productName || "",
             assets,

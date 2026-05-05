@@ -78,7 +78,7 @@ function chatStartUrl() {
 
 function jobDefaultUrl(job) {
   const platform = job.platform || "gpt";
-  if (platform === "jimeng_image" || platform === "jimeng_video") {
+  if (platform === "jimeng") {
     return "https://jimeng.jianying.com/";
   }
   return chatStartUrl();
@@ -382,7 +382,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // S1 (nav) opens a new tab directly - no content script needed
     if (step === "s1_nav") {
-      const targetUrl = platform === "jimeng_image" || platform === "jimeng_video"
+      const targetUrl = platform === "jimeng"
         ? "https://jimeng.jianying.com/"
         : "https://chatgpt.com/images";
       chrome.tabs.create({ url: targetUrl, active: true }, (tab) => {
