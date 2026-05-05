@@ -96,6 +96,44 @@ def upload_file_multipart(url: str, *, cookie: str | None, file_path: pathlib.Pa
         raise RuntimeError(f"POST {url} failed: {error.reason}") from error
 
 
+def save_media_ai_first_frame_upload(
+    job, output_path: pathlib.Path, ip_id: str, *, base_url: str, cookie: str | None
+) -> dict[str, Any]:
+    """Upload and save a first-frame image via multipart (Jimeng path)."""
+    boundary = f"----codex-{uuid.uuid4().hex}"
+    file_bytes = output_path.read_bytes()
+    mime_type = guess_mime_type(output_path)
+    fields = [
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"ipId\"\r\n\r\n{ip_id}\r\n").encode("utf-8"),
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"generationPath\"\r\n\r\njimeng\r\n").encode("utf-8"),
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{output_path.name}\"\r\nContent-Type: {mime_type}\r\n\r\n").encode("utf-8"),
+        file_bytes,
+        f"\r\n--{boundary}--\r\n".encode("utf-8"),
+    ]
+    body = b"".join(fields)
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(body)),
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+    save_url = f"{base_url}/api/products/{job.media_ai.get('productId')}/first-frame-upload"
+    logger.info("[first-frame-upload] POST {url} ipId={ipId} file={file}", url=save_url, ipId=ip_id, file=output_path.name)
+    request = Request(save_url, data=body, headers=headers, method="POST")
+    try:
+        with urlopen(request, timeout=120) as response:
+            raw = response.read().decode("utf-8")
+            result = json.loads(raw) if raw else {}
+            logger.info("[first-frame-upload] OK result={result}", result=result)
+            return result
+    except HTTPError as error:
+        raw = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"POST {save_url} failed with HTTP {error.code}: {raw}") from error
+    except URLError as error:
+        raise RuntimeError(f"POST {save_url} failed: {error.reason}") from error
+
+
 def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, Any] | None:
     """Upload and save a generated image to Media AI."""
     if not job.media_ai:
@@ -131,16 +169,12 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
         save_url = f"{base_url}/api/products/{product_id}/style-image/save"
     elif kind == "first-frame-image":
         if job.platform == "jimeng":
-            # Jimeng first-frame: ipId-based save
+            # Jimeng first-frame: multipart upload directly to /first-frame-upload
             ip_id = ensure_text(job.media_ai.get("ipId") or "")
             if not ip_id:
                 raise RuntimeError("jimeng first-frame requires ipId.")
-            save_body = {
-                "ipId": ip_id,
-                "imageUrl": image_url,
-                "generationPath": "jimeng",
-            }
-            save_url = f"{base_url}/api/products/{product_id}/first-frame"
+            saved = save_media_ai_first_frame_upload(job, output_path, ip_id, base_url=base_url, cookie=cookie)
+            return {"kind": kind, "uploaded": {}, "saved": saved}
         else:
             # GPT first-frame: styleImageId-based save via JSON
             style_image_id = ensure_text(job.media_ai.get("styleImageId") or "")
