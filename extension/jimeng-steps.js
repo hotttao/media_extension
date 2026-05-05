@@ -534,44 +534,52 @@
     };
 
     // Helper: click a thumbnail to open detail modal, return HD URL if ready
-    // HD in modal: width > 300 AND src is a CDN URL (not data: or blob:)
-    // (Jimeng doesn't use blob: URLs in the modal preview, it shows a high-res CDN URL)
-    const tryGetHdFromCard = (imgEl) => {
+    // Jimeng modal shows the previous card's image briefly before switching to the new one.
+    // Strategy: after clicking, wait for modal img src to CHANGE (new image loaded),
+    // then wait for HD version (width > 300 + CDN URL, not data: or blob:).
+    const tryGetHdFromCard = (imgEl, expectedPreviousSrc) => {
       return new Promise((resolve) => {
-        // Close any open modal — ensures we get a fresh modal for this specific card
+        // Close any open modal first — ensures a clean slate
         document.body.click();
         imgEl.click();
-        // Poll for modal with HD image (every 500ms, up to 45s per card)
-        let attempts = 0;
-        const maxAttempts = 90;
+
+        // Step A: wait for the modal img src to change away from expectedPreviousSrc
+        // This means the new card's image has started loading in the modal
+        let srcChanged = false;
+        const maxWaitForSrcChange = 150; // 150 * 500ms = 75s max
+        let waitAttempts = 0;
+
         const checkInterval = setInterval(() => {
-          attempts++;
+          waitAttempts++;
           const modal = document.querySelector(".lv-modal-wrapper");
           if (!modal) {
-            if (attempts >= maxAttempts) {
+            if (waitAttempts >= maxWaitForSrcChange) {
               clearInterval(checkInterval);
               document.body.click();
               setTimeout(() => resolve(null), 100);
             }
             return;
           }
-          // Look for HD image: width > 300 and CDN URL (not blob:, not data:)
+          // Capture current modal img src
           const modalImgs = modal.querySelectorAll("img");
-          const hdImg = Array.from(modalImgs).find(img => {
-            try {
-              const w = img.getBoundingClientRect().width;
-              const src = img.src;
-              return w > 300 && src.startsWith("http") && !src.startsWith("data:");
-            } catch { return false; }
+          const currentImg = modalImgs.find(img => {
+            try { return img.getBoundingClientRect().width > 10; } catch { return false; }
           });
-          if (hdImg) {
+          const currentSrc = currentImg ? currentImg.src : "";
+
+          // Check if src has changed to a real CDN URL (not blob:/data:, not the previous src)
+          if (
+            currentSrc &&
+            !currentSrc.startsWith("data:") &&
+            !currentSrc.startsWith("blob:") &&
+            currentSrc !== expectedPreviousSrc &&
+            currentSrc.includes("http")
+          ) {
+            srcChanged = true;
             clearInterval(checkInterval);
-            const hdUrl = hdImg.src;
-            console.log("[stepWait] HD found:", hdUrl.slice(0, 60), "w:", Math.round(hdImg.getBoundingClientRect().width));
-            // Close modal
-            document.body.click();
-            setTimeout(() => resolve(hdUrl), 200);
-          } else if (attempts >= maxAttempts) {
+            // Step B: now poll for HD version (width > 300 + CDN URL)
+            pollForHd(modal, currentSrc, resolve);
+          } else if (waitAttempts >= maxWaitForSrcChange) {
             clearInterval(checkInterval);
             document.body.click();
             setTimeout(() => resolve(null), 100);
@@ -580,11 +588,44 @@
       });
     };
 
+    // Step B: poll for HD image (width > 300 + CDN URL, different from thumbnailSrc)
+    const pollForHd = (modal, thumbnailSrc, resolve) => {
+      let hdAttempts = 0;
+      const maxHdAttempts = 90;
+      const hdInterval = setInterval(() => {
+        hdAttempts++;
+        const modalImgs = modal.querySelectorAll("img");
+        const hdImg = Array.from(modalImgs).find(img => {
+          try {
+            const w = img.getBoundingClientRect().width;
+            const src = img.src;
+            // Must be wider than 300px and a CDN URL (not the small thumbnail)
+            // The HD image URL is different from the thumbnail src
+            return w > 300 && src.startsWith("http") && !src.startsWith("data:") && src !== thumbnailSrc;
+          } catch { return false; }
+        });
+        if (hdImg) {
+          clearInterval(hdInterval);
+          const hdUrl = hdImg.src;
+          console.log("[stepWait] HD found:", hdUrl.slice(0, 60), "w:", Math.round(hdImg.getBoundingClientRect().width));
+          document.body.click();
+          setTimeout(() => resolve(hdUrl), 200);
+        } else if (hdAttempts >= maxHdAttempts) {
+          clearInterval(hdInterval);
+          document.body.click();
+          setTimeout(() => resolve(null), 100);
+        }
+      }, 500);
+    };
+
     // Main loop: collect up to 4 HD images by clicking each thumbnail in order
     // Start from index 0, advance after each successful HD capture
     const resultUrls = [];
     let tryIndex = 0;
     const MAX_CONSECUTIVE_FAILURES = 8;
+    // Track what the modal's img src was before clicking the next card —
+    // this is what we expect to see briefly before the new card's image appears
+    let lastModalSrcBeforeClick = "";
 
     while (Date.now() < deadline && resultUrls.length < 4) {
       const thumbnails = getThumbnailImages();
@@ -609,8 +650,13 @@
       console.log("[stepWait] attempting HD extraction from card", tryIndex, "...");
 
       try {
-        const hdUrl = await tryGetHdFromCard(target);
+        const hdUrl = await tryGetHdFromCard(target, lastModalSrcBeforeClick);
         if (hdUrl) {
+          // Capture what the modal is showing now (the resolved HD) as baseline for next card
+          const modal = document.querySelector(".lv-modal-wrapper");
+          lastModalSrcBeforeClick = modal
+            ? (modal.querySelector("img")?.src || "")
+            : "";
           resultUrls.push(hdUrl);
           console.log("[stepWait] HD captured:", hdUrl.slice(0, 50), "total:", resultUrls.length);
           tryIndex = 0; // Reset for next image
@@ -637,6 +683,458 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Jimeng Video Steps
+  // ---------------------------------------------------------------------------
+
+  // S1V: Navigate to jimeng video URL
+  async function stepVideoNav(targetUrl) {
+    if (window.location.href !== targetUrl) {
+      window.location.href = targetUrl;
+      return { ok: false, data: { status: "navigating" }, error: null };
+    }
+    return { ok: true, data: { status: "already_on_page", url: window.location.href }, error: null };
+  }
+
+  // S2V: Click "视频生成" tab (skip if already on type=video page)
+  async function stepVideoTab() {
+    if (window.location.href.includes("type=video")) {
+      try {
+        waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
+        return { ok: true, data: { status: "already_on_video_tab" }, error: null };
+      } catch {
+        return { ok: false, data: null, error: "type=video page loaded but combobox not found" };
+      }
+    }
+
+    const candidates = () => Array.from(document.querySelectorAll("*")).filter(el =>
+      el.childNodes.length === 1 && (textLike(el.textContent, "图片生成") || textLike(el.textContent, "视频生成"))
+    );
+
+    let tab = null;
+    const tabs = candidates();
+    for (const t of tabs) {
+      if (isVisible(t)) { tab = t; break; }
+    }
+
+    if (!tab) {
+      const clicked = await document.evaluate(() => {
+        const els = document.querySelectorAll("*");
+        for (const el of els) {
+          if (el.childNodes.length === 1 && textLike(el.textContent, "视频生成")) {
+            el.click(); return true;
+          }
+        }
+        return false;
+      });
+      if (!clicked) return { ok: false, data: null, error: "视频生成 tab not found" };
+      await delay(1000);
+      waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
+      waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
+      return { ok: true, data: { status: "clicked_via_evaluate" }, error: null };
+    }
+
+    const parentClickable = tab.parentElement;
+    const isMenuItem = parentClickable && (parentClickable.getAttribute("role")?.includes("menu") ||
+      parentClickable.className?.includes("menu") || parentClickable.tagName === "LI");
+
+    if (!isMenuItem && textLike(tab.textContent, "视频生成")) {
+      const parentVisible = parentClickable && isVisible(parentClickable);
+      if (parentVisible) {
+        parentClickable.click();
+        await delay(1000);
+        const secondClick = Array.from(document.querySelectorAll("*")).find(el =>
+          textLike(el.textContent, "视频生成") && isVisible(el) && el !== tab
+        );
+        if (secondClick) { secondClick.click(); }
+        waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
+        return { ok: true, data: { status: "parent_then_option", parentTag: parentClickable.tagName }, error: null };
+      }
+      tab.click();
+      await delay(1000);
+      const option = Array.from(document.querySelectorAll("*")).find(el =>
+        textLike(el.textContent, "视频生成") && isVisible(el) && el !== tab
+      );
+      if (option) { option.click(); }
+      waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
+      return { ok: true, data: { status: "trigger_then_option" }, error: null };
+    }
+
+    tab.click();
+    waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
+    return { ok: true, data: { status: "menu_item_clicked" }, error: null };
+  }
+
+  // S3V: Select Seedance model
+  async function stepVideoModel() {
+    const delayMs = 500;
+
+    try {
+      waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 20000, label: "model_combobox" });
+    } catch {
+      const comboboxes = Array.from(document.querySelectorAll('[role="combobox"]'));
+      const comboboxTexts = comboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
+      throw new Error(`Model combobox not found (timed out, found: ${comboboxTexts})`);
+    }
+
+    const comboboxes = Array.from(document.querySelectorAll('[role="combobox"]'));
+    const modelCombobox = comboboxes.find(el =>
+      textIncludes(el.textContent || "", "Seedance")
+    );
+    if (!modelCombobox) {
+      const comboboxTexts = comboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
+      throw new Error(`Seedance combobox not found (found: ${comboboxTexts})`);
+    }
+
+    let listbox = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      modelCombobox.click();
+      await delay(delayMs);
+      const allListboxes = Array.from(document.querySelectorAll('[role="listbox"]'));
+      listbox = allListboxes.find(lb => textIncludes(lb.textContent || "", "Seedance"));
+      if (listbox) break;
+      document.body.click();
+      await delay(300);
+    }
+    if (!listbox) {
+      const allListboxes = Array.from(document.querySelectorAll('[role="listbox"]')).map(el => el.textContent?.trim().slice(0, 40)).join(" | ");
+      throw new Error(`Seedance listbox not visible after combobox click (found: ${allListboxes || "none"})`);
+    }
+
+    const options = Array.from(listbox.querySelectorAll('[role="option"]'));
+    const targetOption = options.find(el => textIncludes(el.textContent || "", "Seedance"));
+    if (!targetOption) {
+      // Already default-selected
+      document.body.click();
+      await delay(300);
+      return { ok: true, data: { status: "model_already_selected" }, error: null };
+    }
+
+    targetOption.click();
+    await delay(delayMs);
+    document.body.click();
+    await delay(300);
+    return { ok: true, data: { modelText: modelCombobox.textContent?.trim() || "" }, error: null };
+  }
+
+  // S4V: Select aspect ratio
+  async function stepVideoRatio(job) {
+    const ratio = job.aspectRatio || "16:9";
+    if (ratio === "16:9") {
+      return { ok: true, data: { ratio: "16:9", status: "default_ratio" }, error: null };
+    }
+
+    const delayMs = 500;
+    const allButtons = () => Array.from(document.querySelectorAll("button")).filter(isVisible);
+
+    const ratioBtn = allButtons().find(el => /\d+:\d+/.test(el.textContent || ""));
+    if (!ratioBtn) {
+      const allBtns = allButtons().map(el => el.textContent?.trim().slice(0, 40)).join(" | ");
+      throw new Error(`Ratio button not found (buttons: ${allBtns})`);
+    }
+
+    ratioBtn.click();
+    await delay(delayMs);
+
+    const ratioLabel = Array.from(document.querySelectorAll("label.lv-radio")).find(el =>
+      textLike(el.textContent?.trim(), ratio)
+    );
+    if (!ratioLabel) {
+      const allLabels = Array.from(document.querySelectorAll("label.lv-radio")).map(l => l.textContent?.trim()).join(" | ");
+      throw new Error(`Ratio ${ratio} not found in dropdown (found: ${allLabels})`);
+    }
+
+    ratioLabel.click();
+    await delay(200);
+    document.body.click();
+    await delay(300);
+    return { ok: true, data: { ratio }, error: null };
+  }
+
+  // S5V: Upload first-frame image
+  async function stepVideoUploadFirstFrame(asset) {
+    if (!asset) return { ok: true, data: { status: "skipped", reason: "no_asset" }, error: null };
+
+    const delayMs = 500;
+
+    // Find zone containing "首帧"
+    let zone = null;
+    for (const el of document.querySelectorAll("[class*='reference-item']")) {
+      if (textIncludes(el.textContent || "", "首帧") && isVisible(el)) {
+        zone = el;
+        break;
+      }
+    }
+    if (!zone) {
+      // Try broader search
+      for (const el of document.querySelectorAll("*")) {
+        if (textIncludes(el.textContent || "", "首帧") && isVisible(el) && el.querySelector("input[type='file']")) {
+          zone = el; break;
+        }
+      }
+    }
+    if (!zone) return { ok: true, data: { status: "skipped", reason: "no_first_frame_zone" }, error: null };
+
+    const fileInput = zone.querySelector("input[type='file']");
+    if (!fileInput) return { ok: true, data: { status: "skipped", reason: "no_file_input_in_zone" }, error: null };
+
+    const response = await bridgeFetch({ url: asset.url, responseType: "blobBase64" });
+    const binary = atob(response.base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const mimeType = asset.mimeType || response.mimeType || "application/octet-stream";
+    const file = new File([bytes], asset.name, { type: mimeType });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    fileInput.files = transfer.files;
+    fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+    // Wait for preview image to appear (img width > 50, not data:/blob:)
+    await waitFor(() => {
+      const imgs = zone.querySelectorAll("img");
+      return Array.from(imgs).find(img => {
+        try { return img.getBoundingClientRect().width > 50 && !img.src.startsWith("data:") && !img.src.startsWith("blob:"); } catch { return false; }
+      }) || null;
+    }, { timeoutMs: 15000, label: "first_frame_preview" });
+
+    return { ok: true, data: { status: "uploaded", name: asset.name }, error: null };
+  }
+
+  // S6V: Upload last-frame image
+  async function stepVideoUploadLastFrame(asset) {
+    if (!asset) return { ok: true, data: { status: "skipped", reason: "no_asset" }, error: null };
+
+    const delayMs = 500;
+
+    // Find zone containing "尾帧"
+    let zone = null;
+    for (const el of document.querySelectorAll("[class*='reference-item']")) {
+      if (textIncludes(el.textContent || "", "尾帧") && isVisible(el)) {
+        zone = el; break;
+      }
+    }
+    if (!zone) {
+      for (const el of document.querySelectorAll("*")) {
+        if (textIncludes(el.textContent || "", "尾帧") && isVisible(el) && el.querySelector("input[type='file']")) {
+          zone = el; break;
+        }
+      }
+    }
+    if (!zone) return { ok: true, data: { status: "skipped", reason: "no_last_frame_zone" }, error: null };
+
+    const fileInput = zone.querySelector("input[type='file']");
+    if (!fileInput) return { ok: true, data: { status: "skipped", reason: "no_file_input_in_zone" }, error: null };
+
+    const response = await bridgeFetch({ url: asset.url, responseType: "blobBase64" });
+    const binary = atob(response.base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const mimeType = asset.mimeType || response.mimeType || "application/octet-stream";
+    const file = new File([bytes], asset.name, { type: mimeType });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    fileInput.files = transfer.files;
+    fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+    await waitFor(() => {
+      const imgs = zone.querySelectorAll("img");
+      return Array.from(imgs).find(img => {
+        try { return img.getBoundingClientRect().width > 50 && !img.src.startsWith("data:") && !img.src.startsWith("blob:"); } catch { return false; }
+      }) || null;
+    }, { timeoutMs: 15000, label: "last_frame_preview" });
+
+    return { ok: true, data: { status: "uploaded", name: asset.name }, error: null };
+  }
+
+  // S7V: Fill prompt and movement textareas
+  async function stepVideoPrompt(job) {
+    const delayMs = 300;
+
+    const promptEls = () => {
+      const results = [];
+      for (const el of document.querySelectorAll("textarea")) {
+        if (isVisible(el)) results.push(el);
+      }
+      return results;
+    };
+
+    // Find textarea with placeholder containing "运动方式"
+    const movementTextarea = promptEls().find(el =>
+      textIncludes(el.getAttribute("placeholder") || "", "运动方式")
+    );
+    const promptTextarea = promptEls().find(el =>
+      el !== movementTextarea && textIncludes(el.getAttribute("placeholder") || "", "描述")
+    );
+
+    if (movementTextarea) {
+      movementTextarea.focus();
+      movementTextarea.value = "";
+      movementTextarea.value = job.movement || job.prompt || "";
+      movementTextarea.dispatchEvent(new InputEvent("input", { bubbles: true, data: job.movement || job.prompt }));
+      movementTextarea.dispatchEvent(new Event("change", { bubbles: true }));
+      await delay(delayMs);
+    }
+
+    if (promptTextarea) {
+      promptTextarea.focus();
+      promptTextarea.value = "";
+      promptTextarea.value = job.prompt || "";
+      promptTextarea.dispatchEvent(new InputEvent("input", { bubbles: true, data: job.prompt }));
+      promptTextarea.dispatchEvent(new Event("change", { bubbles: true }));
+      await delay(delayMs);
+    } else if (promptEls().length >= 2) {
+      // Fallback: fill first visible textarea with movement/prompt, second with prompt
+      const all = promptEls();
+      all[0].focus();
+      all[0].value = "";
+      all[0].value = job.movement || job.prompt || "";
+      all[0].dispatchEvent(new InputEvent("input", { bubbles: true }));
+      all[0].dispatchEvent(new Event("change", { bubbles: true }));
+      await delay(delayMs);
+      all[1].focus();
+      all[1].value = "";
+      all[1].value = job.prompt || "";
+      all[1].dispatchEvent(new InputEvent("input", { bubbles: true }));
+      all[1].dispatchEvent(new Event("change", { bubbles: true }));
+      await delay(delayMs);
+    } else if (promptEls().length === 1) {
+      // Only one textarea found, fill it with prompt
+      const el = promptEls()[0];
+      el.focus();
+      el.value = "";
+      el.value = job.prompt || "";
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, data: job.prompt }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      await delay(delayMs);
+    }
+
+    return { ok: true, data: { promptLength: (job.prompt || "").length, movementLength: (job.movement || "").length }, error: null };
+  }
+
+  // S8V: Click generate button
+  async function stepVideoGenerate() {
+    const delayMs = 200;
+
+    const enabledBtn = waitFor(() => {
+      const btn = document.querySelector("button.lv-btn-primary:not([disabled])");
+      return btn || null;
+    }, { timeoutMs: 300000, label: "lv-btn-primary_enabled" });
+
+    const targetBtn = await enabledBtn;
+    if (!targetBtn) {
+      const allBtns = Array.from(document.querySelectorAll("button")).slice(0, 8).map(b =>
+        `dis:${b.disabled} cls:${b.className.replace(/\S+/g, m => m).slice(0, 35)}`
+      ).join(" | ");
+      throw new Error(`Generate button never became enabled (all_btns: ${allBtns})`);
+    }
+
+    console.log("[stepVideoGenerate] clicking:", targetBtn.className.slice(0, 40));
+    targetBtn.click();
+    await delay(delayMs);
+
+    const isProcessing = document.querySelector("button.lv-btn-primary:disabled") !== null;
+    console.log("[stepVideoGenerate] clicked, processing:", isProcessing);
+    return { ok: true, data: { clicked: targetBtn.className.slice(0, 30), processing: isProcessing }, error: null };
+  }
+
+  // S9V: Wait for generated video
+  async function stepVideoWait(job) {
+    const TIMEOUT_MS = (job.timeoutSeconds ? job.timeoutSeconds : 600) * 1000;
+    const deadline = Date.now() + TIMEOUT_MS;
+    const POLL_INTERVAL_MS = 3000;
+
+    // Wait for /generate navigation
+    if (!window.location.href.includes("/generate")) {
+      console.log("[stepVideoWait] waiting for /generate navigation...");
+      const navDeadline = Date.now() + 60000;
+      while (Date.now() < navDeadline) {
+        if (window.location.href.includes("/generate")) {
+          console.log("[stepVideoWait] navigated to:", window.location.href);
+          break;
+        }
+        await delay(500);
+      }
+    }
+
+    console.log("[stepVideoWait] START, deadline in", Math.round((deadline - Date.now()) / 1000), "s at:", window.location.href);
+
+    // Helper: poll for stable video source
+    const pollForStableVideo = async () => {
+      let lastSrc = "";
+      let stableCount = 0;
+      const STABLE_THRESHOLD = 8; // seconds stable
+
+      while (Date.now() < deadline) {
+        // Try video element first
+        const videoEl = document.querySelector("video");
+        if (videoEl && videoEl.src && !videoEl.src.startsWith("data:") && !videoEl.src.startsWith("blob:") && videoEl.src === lastSrc) {
+          stableCount += POLL_INTERVAL_MS / 1000;
+          if (stableCount >= STABLE_THRESHOLD) {
+            return { videoUrl: videoEl.src, sourceType: "videoElement" };
+          }
+        } else if (videoEl && videoEl.src) {
+          lastSrc = videoEl.src;
+          stableCount = 0;
+        }
+
+        // Try download link (a[href*=".mp4"])
+        const downloadLink = document.querySelector("a[href*='.mp4']");
+        if (downloadLink && downloadLink.href && downloadLink.href === lastSrc) {
+          stableCount += POLL_INTERVAL_MS / 1000;
+          if (stableCount >= STABLE_THRESHOLD) {
+            return { videoUrl: downloadLink.href, sourceType: "downloadLink" };
+          }
+        } else if (downloadLink && downloadLink.href) {
+          lastSrc = downloadLink.href;
+          stableCount = 0;
+        }
+
+        await delay(POLL_INTERVAL_MS);
+      }
+      return null;
+    };
+
+    // Try polling approach first
+    const pollResult = await pollForStableVideo();
+    if (pollResult) {
+      console.log("[stepVideoWait] video found via polling:", pollResult.sourceType);
+      return { ok: true, data: pollResult, error: null };
+    }
+
+    // Fallback: look for "去查看" button and click it, then wait for video element
+    const viewBtn = Array.from(document.querySelectorAll("a, button")).find(el =>
+      textIncludes(el.textContent || "", "去查看")
+    );
+    if (viewBtn) {
+      console.log("[stepVideoWait] clicking '去查看' button");
+      viewBtn.click();
+      await delay(2000);
+
+      const videoEl = waitFor(() => {
+        const v = document.querySelector("video");
+        return (v && v.src && !v.src.startsWith("data:") && !v.src.startsWith("blob:")) ? v : null;
+      }, { timeoutMs: 30000, label: "video_element_after_view" });
+
+      if (videoEl) {
+        // Wait for video to be stable
+        let lastSrc = "";
+        let stableCount = 0;
+        while (Date.now() < deadline && stableCount < 8) {
+          if (videoEl.src === lastSrc && lastSrc !== "") {
+            stableCount += 1;
+          } else {
+            lastSrc = videoEl.src;
+            stableCount = 0;
+          }
+          await delay(1000);
+        }
+        return { ok: true, data: { videoUrl: videoEl.src, sourceType: "videoElement" }, error: null };
+      }
+    }
+
+    return { ok: false, data: null, error: `Timed out after ${job.timeoutSeconds || 600}s, no video found` };
+  }
+
+  // ---------------------------------------------------------------------------
   // Export to window (shared across all content scripts)
   // ---------------------------------------------------------------------------
   window.stepNav = stepNav;
@@ -647,4 +1145,13 @@
   window.stepPrompt = stepPrompt;
   window.stepGenerate = stepGenerate;
   window.stepWait = stepWait;
+  window.stepVideoNav = stepVideoNav;
+  window.stepVideoTab = stepVideoTab;
+  window.stepVideoModel = stepVideoModel;
+  window.stepVideoRatio = stepVideoRatio;
+  window.stepVideoUploadFirstFrame = stepVideoUploadFirstFrame;
+  window.stepVideoUploadLastFrame = stepVideoUploadLastFrame;
+  window.stepVideoPrompt = stepVideoPrompt;
+  window.stepVideoGenerate = stepVideoGenerate;
+  window.stepVideoWait = stepVideoWait;
 })();
