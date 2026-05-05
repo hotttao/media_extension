@@ -199,7 +199,7 @@ def main() -> int:
                 ]
                 if pose_id:
                     dir_parts.append(f"pose-{slugify(pose_name)}-{pose_id[:8]}")
-                job_id = "__".join(dir_parts)
+                job_id = f"jimeng-{style_image_id[:8]}"
                 task_dir = output_root / job_id
                 input_dir = task_dir / "input"
                 assets_dir = input_dir / "assets"

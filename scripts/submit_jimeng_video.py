@@ -127,7 +127,7 @@ def main() -> int:
             pass  # No automatic pose matching for now
 
         # Build task directory
-        job_id = f"jimeng-video-{first_frame_id[:8]}"
+        job_id = f"jimeng-vid-{first_frame_id[:8]}"
         task_dir = output_root / job_id
         input_dir = task_dir / "input"
         assets_dir = input_dir / "assets"
