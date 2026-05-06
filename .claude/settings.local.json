@@ -180,7 +180,13 @@
       "Bash(git -C:*)",
       "Bash(PYTHONPATH=. uv run pytest tests/test_http_layer.py::Test_save_media_ai_generated_image::test_jimeng_first_frame_upload_with_real_files -v)",
       "Bash(PYTHONPATH=. uv run pytest tests/ -v --tb=no)",
-      "Bash(PYTHONPATH=. uv run pytest tests/test_utils.py -v --tb=short)"
+      "Bash(PYTHONPATH=. uv run pytest tests/test_utils.py -v --tb=short)",
+      "Bash(curl -s -X POST \"http://localhost:3456/eval?target=C2ABAAE92DBB2D6B4F6A359723583110\" -d 'document.querySelectorAll\\(\"\"[role=combobox]\"\"\\).length')",
+      "Bash(PYTHONPATH=. uv run pytest:*)",
+      "Bash(curl -s -X:*)",
+      "Read(//d/Code/media/media_ai/app/api/products/**)",
+      "Read(//d/Code/media/media_ai/**)",
+      "Bash(find D:/Code/media/media_ai/app -name *video* -type d)"
     ]
   }
 }
