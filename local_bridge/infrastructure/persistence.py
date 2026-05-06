@@ -16,9 +16,11 @@ class JobStore:
 
     def add_jobs(self, case_paths: list[pathlib.Path]) -> list[Job]:
         with self.lock:
+            existing_ids = {job.id for job in self.jobs}
             jobs = build_jobs(case_paths, self.output_root, start_index=len(self.jobs) + 1)
-            self.jobs.extend(jobs)
-            return jobs
+            new_jobs = [j for j in jobs if j.id not in existing_ids]
+            self.jobs.extend(new_jobs)
+            return new_jobs
 
     def claim_next_job(self, worker_id: str | None) -> Job | None:
         with self.lock:

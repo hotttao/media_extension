@@ -197,10 +197,19 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
 
     job_id = (
         f"jimeng-vid-{resolved_product_id[:8]}"
-        f"{f'-ip-{resolved_ip_id[:8]}' if resolved_ip_id else ''}"
         f"{f'-ff-{resolved_first_frame_id[:8]}' if resolved_first_frame_id else ''}"
+        f"{f'-mv-{body.movementId[:8]}' if body.movementId else ''}"
     )
-    task_dir = request.app.state.store.output_root / job_id
+    store = request.app.state.store
+    # If already completed, return existing job directly
+    existing = store.get_job(job_id)
+    if existing and existing.status == "completed":
+        return SingleJobCreatedResponse(
+            ok=True,
+            job={"id": existing.id, "caseFile": str(existing.case_file), "mediaAi": public_media_ai(existing.media_ai)},
+            message="Job already completed",
+        )
+    task_dir = store.output_root / job_id
     input_dir = task_dir / "input"
     assets_dir = input_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
