@@ -571,7 +571,7 @@
     // seenModalSrcs: all img URLs ever seen in ANY modal in this session (accumulates
     // across all cards). This prevents re-capturing the same image when the modal
     // briefly shows the previous card's images before switching to the new one.
-    const tryGetHdFromCard = (imgEl, seenModalSrcs) => {
+    const tryGetHdFromCard = (imgEl) => {
       return new Promise((resolve) => {
         document.body.click(); // close any open modal first
         imgEl.click();
@@ -604,14 +604,12 @@
               const w = img.getBoundingClientRect().width;
               const src = img.src;
               // Must be wider than 300px, a real CDN URL, and not already seen in this session
-              return w > 300 && src.startsWith("http") && !src.startsWith("data:") && !seenModalSrcs.has(src);
+              return w > 300 && src.startsWith("http") && !src.startsWith("data:") && !src.startsWith("blob:");
             } catch { return false; }
           });
           if (hdImg) {
             clearInterval(pollInterval);
             const hdUrl = hdImg.src;
-            // Add ALL imgs from this poll to seenModalSrcs (not just the HD one)
-            modalImgs.forEach(function(img) { try { seenModalSrcs.add(img.src); } catch(e) {} });
             console.log("[stepWait] HD found:", hdUrl.slice(0, 60), "w:", Math.round(hdImg.getBoundingClientRect().width));
             document.body.click();
             setTimeout(() => resolve(hdUrl), 200);
@@ -626,9 +624,6 @@
 
     // Main loop: collect up to 4 HD images by clicking each thumbnail in order
     const resultUrls = [];
-    // Track ALL img URLs ever seen in any modal in this session — prevents
-    // re-capturing when the modal briefly shows the previous card's images
-    const seenModalSrcs = new Set();
     let tryIndex = 0;
 
     while (Date.now() < deadline && resultUrls.length < 4) {
@@ -654,7 +649,7 @@
       console.log("[stepWait] attempting HD extraction from card", tryIndex, "...");
 
       try {
-        const hdUrl = await tryGetHdFromCard(target, seenModalSrcs);
+        const hdUrl = await tryGetHdFromCard(target);
         if (hdUrl) {
           resultUrls.push(hdUrl);
           console.log("[stepWait] HD captured:", hdUrl.slice(0, 50), "total:", resultUrls.length);
