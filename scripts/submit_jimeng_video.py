@@ -153,6 +153,9 @@ def main() -> int:
         # Build movement display text for task.md
         movement_display = movement_text if movement_text else "[动作描述待填入]"
 
+        # Fill prompt template placeholders
+        filled_prompt = prompt.replace("{{ 动作细节 }}", movement_text) if movement_text else prompt
+
         # Write task.md
         lines = [
             f"# 即梦视频生成 / {product_name}",
@@ -161,7 +164,7 @@ def main() -> int:
             "",
             f"**动作描述**: {movement_display}",
             "",
-            prompt,
+            filled_prompt,
             "",
         ]
         case_path = input_dir / "task.md"

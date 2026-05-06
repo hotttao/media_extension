@@ -1,0 +1,56 @@
+{
+  "kind": "first-frame-image",
+  "platform": "jimeng",
+  "save_url": "http://localhost:3000/api/products/3813528280213094793/first-frame-upload",
+  "save_body": {
+    "ipId": "981cd79c-5973-429a-8edf-dff3eda45014",
+    "generationPath": "jimeng",
+    "styleImageId": "f07aff65-ba21-4e2c-9580-d599417318f8"
+  },
+  "output_paths": [
+    "D:\\Code\\media\\gpt_image2\\runs\\jimeng-f07aff65\\output\\result-01.webp",
+    "D:\\Code\\media\\gpt_image2\\runs\\jimeng-f07aff65\\output\\result-02.webp",
+    "D:\\Code\\media\\gpt_image2\\runs\\jimeng-f07aff65\\output\\result-03.webp",
+    "D:\\Code\\media\\gpt_image2\\runs\\jimeng-f07aff65\\output\\result-04.webp"
+  ],
+  "image_urls": [
+    "/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-frame-images/result-01_6707d189-5529-427b-b855-0c82cb902af0.webp",
+    "/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-frame-images/result-02_1f9e42d0-ac7b-4a01-81b2-fdce657b068d.webp",
+    "/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-frame-images/result-03_6a8d2812-a88b-486d-a69a-e5f4383ae9c0.webp",
+    "/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-frame-images/result-04_f47a2bbd-1590-4d9b-8f65-40364be5d9d9.webp"
+  ],
+  "saved": {
+    "success": true,
+    "count": 4,
+    "results": [
+      {
+        "index": 0,
+        "firstFrameId": "13986d11-db9e-47a6-870e-208f32b5fc58",
+        "firstFrameUrl": "/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-frames/result-01_4b8a7707-6399-4f1d-bf32-33518c317304.webp",
+        "alternativeId": "e8c83979-c4be-48cb-a835-4f05cfcd2232",
+        "status": "existing"
+      },
+      {
+        "index": 1,
+        "firstFrameId": "13986d11-db9e-47a6-870e-208f32b5fc58",
+        "firstFrameUrl": "/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-frames/result-02_bfcdadb8-692f-4ce8-b39e-c54f787d79d0.webp",
+        "alternativeId": "3c92ef5d-586b-4c83-82ff-f40f3572dda7",
+        "status": "existing"
+      },
+      {
+        "index": 2,
+        "firstFrameId": "13986d11-db9e-47a6-870e-208f32b5fc58",
+        "firstFrameUrl": "/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-frames/result-03_0ed25b2d-1856-403b-85d1-c89164ce706c.webp",
+        "alternativeId": "a388d690-0156-4a44-8d92-c5a0b68551c7",
+        "status": "existing"
+      },
+      {
+        "index": 3,
+        "firstFrameId": "13986d11-db9e-47a6-870e-208f32b5fc58",
+        "firstFrameUrl": "/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-frames/result-04_99391cca-02ac-4446-a627-28efb5e0ee3b.webp",
+        "alternativeId": "dc946e9e-4dc3-4019-84da-e1314eb7e1ac",
+        "status": "existing"
+      }
+    ]
+  }
+}

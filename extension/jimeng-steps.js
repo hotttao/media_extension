@@ -203,25 +203,58 @@
     console.log("[stepModel] listboxes found:", listboxes.length);
     listboxes.forEach((lb, i) => {
       const opts = lb.querySelectorAll('[role="option"]');
-      console.log(`  listbox[${i}] text:${lb.textContent.trim().slice(0,40)} options:${opts.length}`);
-      Array.from(opts).slice(0,3).forEach((o, j) => console.log(`    opt[${j}]: "${o.textContent.trim().slice(0,20)}"`));
+      console.log(`  listbox[${i}] text:${lb.textContent.trim().slice(0,40)} role-option-count:${opts.length}`);
+      // Also log direct children as fallback
+      const children = Array.from(lb.children || []);
+      console.log(`  listbox[${i}] direct-children:${children.length}`);
+      children.forEach((c, j) => console.log(`    child[${j}]: tag=${c.tagName} text="${c.textContent?.trim().slice(0,30)}" aria="${c.getAttribute("aria-label") || ""}"`));
     });
 
-    const options = Array.from(document.querySelectorAll('[role="option"]'));
-    console.log("[stepModel] raw querySelectorAll('[role=option]') result:", options.length);
+    // Try role="option" first, then fall back to all clickable children of listbox
+    let options = Array.from(document.querySelectorAll('[role="option"]'));
+    console.log("[stepModel] role=option count:", options.length);
+
+    // Helper: get display text from an option element
+    const optionDisplayText = (el) => {
+      const direct = el.textContent?.trim() || "";
+      if (direct) return direct;
+      return el.getAttribute("aria-label") || "";
+    };
+
+    // If no role=option elements, search listbox children directly
+    if (options.length === 0 && listboxes.length > 0) {
+      console.log("[stepModel] no role=option found, searching listbox children directly");
+      const allClickable = [];
+      listboxes.forEach(lb => {
+        Array.from(lb.querySelectorAll("*")).forEach(el => {
+          const tag = el.tagName?.toUpperCase();
+          if (tag === "LI" || tag === "BUTTON" || tag === "DIV" || el.getAttribute("role") === "option") {
+            const text = optionDisplayText(el);
+            if (text || isVisible(el)) {
+              allClickable.push(el);
+              console.log(`[stepModel] clickable child: tag=${tag} text="${text.slice(0,30)}"`);
+            }
+          }
+        });
+      });
+      options = allClickable;
+    }
+
     // Fuzzy: prefer "Lite" option, fall back to any model option with version number
-    let targetOption = options.find(el =>
-      el.textContent?.trim().includes("Lite")
-    );
+    let targetOption = options.find(el => optionDisplayText(el).includes("Lite"));
     if (!targetOption) {
-      targetOption = options.find(el => /[\d]+\.[\d]+/.test(el.textContent?.trim() || ""));
+      targetOption = options.find(el => /[\d]+\.[\d]+/.test(optionDisplayText(el)));
     }
     if (!targetOption && options.length > 0) {
-      targetOption = options[0]; // fall back to first option
+      // Last resort: first visible, non-empty option
+      targetOption = options.find(el => isVisible(el) && optionDisplayText(el));
+    }
+    if (!targetOption && options.length > 0) {
+      targetOption = options[0];
     }
     if (!targetOption) {
-      const optionTexts = options.map(o => o.textContent?.trim().slice(0, 40)).join(" | ");
-      throw new Error(`No selectable model option found (options: ${optionTexts || "NONE"})`);
+      const optionSummaries = options.map((o, i) => `${i}:text="${optionDisplayText(o).slice(0,20)}"`).join(" | ");
+      throw new Error(`No selectable model option found (options: ${optionSummaries || "NONE"})`);
     }
 
     targetOption.click();
@@ -533,54 +566,57 @@
       });
     };
 
-    // Helper: click a thumbnail to open detail modal, return HD URL if ready
-    // Jimeng modal shows the previous card's image briefly before switching to the new one.
-    // Strategy: after clicking, wait for modal img src to CHANGE (new image loaded),
-    // then wait for HD version (width > 300 + CDN URL, not data: or blob:).
-    const tryGetHdFromCard = (imgEl, expectedPreviousSrc) => {
+    // Helper: click a thumbnail to open detail modal, return HD URL if ready.
+    // Clicks thumbnail → immediately polls for a CDN image NOT yet in seenModalSrcs.
+    // seenModalSrcs: all img URLs ever seen in ANY modal in this session (accumulates
+    // across all cards). This prevents re-capturing the same image when the modal
+    // briefly shows the previous card's images before switching to the new one.
+    const tryGetHdFromCard = (imgEl, seenModalSrcs) => {
       return new Promise((resolve) => {
-        // Close any open modal first — ensures a clean slate
-        document.body.click();
+        document.body.click(); // close any open modal first
         imgEl.click();
 
-        // Step A: wait for the modal img src to change away from expectedPreviousSrc
-        // This means the new card's image has started loading in the modal
-        let srcChanged = false;
-        const maxWaitForSrcChange = 150; // 150 * 500ms = 75s max
-        let waitAttempts = 0;
-
-        const checkInterval = setInterval(() => {
-          waitAttempts++;
+        let attempts = 0;
+        const maxAttempts = 90; // 90 * 500ms = 45s per card
+        const pollInterval = setInterval(() => {
+          attempts++;
           const modal = document.querySelector(".lv-modal-wrapper");
           if (!modal) {
-            if (waitAttempts >= maxWaitForSrcChange) {
-              clearInterval(checkInterval);
+            if (attempts >= maxAttempts) {
+              clearInterval(pollInterval);
               document.body.click();
               setTimeout(() => resolve(null), 100);
             }
             return;
           }
-          // Capture current modal img src
-          const modalImgs = modal.querySelectorAll("img");
-          const currentImg = modalImgs.find(img => {
-            try { return img.getBoundingClientRect().width > 10; } catch { return false; }
+          const modalImgs = Array.from(modal.querySelectorAll("img"));
+          if (attempts <= 3 || attempts % 20 === 0) {
+            console.log("[stepWait] modal[" + attempts + "]: " + modalImgs.length + " imgs, " +
+              modalImgs.slice(0, 3).map(function(img) {
+                try {
+                  return "w=" + Math.round(img.getBoundingClientRect().width) + " src=" + img.src.slice(0, 50) + " isData=" + (img.src.startsWith("data:") ? "1" : "0") + " isBlob=" + (img.src.startsWith("blob:") ? "1" : "0");
+                } catch(e) { return "ERROR"; }
+              }).join(" | ")
+            );
+          }
+          const hdImg = modalImgs.find(img => {
+            try {
+              const w = img.getBoundingClientRect().width;
+              const src = img.src;
+              // Must be wider than 300px, a real CDN URL, and not already seen in this session
+              return w > 300 && src.startsWith("http") && !src.startsWith("data:") && !seenModalSrcs.has(src);
+            } catch { return false; }
           });
-          const currentSrc = currentImg ? currentImg.src : "";
-
-          // Check if src has changed to a real CDN URL (not blob:/data:, not the previous src)
-          if (
-            currentSrc &&
-            !currentSrc.startsWith("data:") &&
-            !currentSrc.startsWith("blob:") &&
-            currentSrc !== expectedPreviousSrc &&
-            currentSrc.includes("http")
-          ) {
-            srcChanged = true;
-            clearInterval(checkInterval);
-            // Step B: now poll for HD version (width > 300 + CDN URL)
-            pollForHd(modal, currentSrc, resolve);
-          } else if (waitAttempts >= maxWaitForSrcChange) {
-            clearInterval(checkInterval);
+          if (hdImg) {
+            clearInterval(pollInterval);
+            const hdUrl = hdImg.src;
+            // Add ALL imgs from this poll to seenModalSrcs (not just the HD one)
+            modalImgs.forEach(function(img) { try { seenModalSrcs.add(img.src); } catch(e) {} });
+            console.log("[stepWait] HD found:", hdUrl.slice(0, 60), "w:", Math.round(hdImg.getBoundingClientRect().width));
+            document.body.click();
+            setTimeout(() => resolve(hdUrl), 200);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
             document.body.click();
             setTimeout(() => resolve(null), 100);
           }
@@ -588,44 +624,12 @@
       });
     };
 
-    // Step B: poll for HD image (width > 300 + CDN URL, different from thumbnailSrc)
-    const pollForHd = (modal, thumbnailSrc, resolve) => {
-      let hdAttempts = 0;
-      const maxHdAttempts = 90;
-      const hdInterval = setInterval(() => {
-        hdAttempts++;
-        const modalImgs = modal.querySelectorAll("img");
-        const hdImg = Array.from(modalImgs).find(img => {
-          try {
-            const w = img.getBoundingClientRect().width;
-            const src = img.src;
-            // Must be wider than 300px and a CDN URL (not the small thumbnail)
-            // The HD image URL is different from the thumbnail src
-            return w > 300 && src.startsWith("http") && !src.startsWith("data:") && src !== thumbnailSrc;
-          } catch { return false; }
-        });
-        if (hdImg) {
-          clearInterval(hdInterval);
-          const hdUrl = hdImg.src;
-          console.log("[stepWait] HD found:", hdUrl.slice(0, 60), "w:", Math.round(hdImg.getBoundingClientRect().width));
-          document.body.click();
-          setTimeout(() => resolve(hdUrl), 200);
-        } else if (hdAttempts >= maxHdAttempts) {
-          clearInterval(hdInterval);
-          document.body.click();
-          setTimeout(() => resolve(null), 100);
-        }
-      }, 500);
-    };
-
     // Main loop: collect up to 4 HD images by clicking each thumbnail in order
-    // Start from index 0, advance after each successful HD capture
     const resultUrls = [];
+    // Track ALL img URLs ever seen in any modal in this session — prevents
+    // re-capturing when the modal briefly shows the previous card's images
+    const seenModalSrcs = new Set();
     let tryIndex = 0;
-    const MAX_CONSECUTIVE_FAILURES = 8;
-    // Track what the modal's img src was before clicking the next card —
-    // this is what we expect to see briefly before the new card's image appears
-    let lastModalSrcBeforeClick = "";
 
     while (Date.now() < deadline && resultUrls.length < 4) {
       const thumbnails = getThumbnailImages();
@@ -650,13 +654,8 @@
       console.log("[stepWait] attempting HD extraction from card", tryIndex, "...");
 
       try {
-        const hdUrl = await tryGetHdFromCard(target, lastModalSrcBeforeClick);
+        const hdUrl = await tryGetHdFromCard(target, seenModalSrcs);
         if (hdUrl) {
-          // Capture what the modal is showing now (the resolved HD) as baseline for next card
-          const modal = document.querySelector(".lv-modal-wrapper");
-          lastModalSrcBeforeClick = modal
-            ? (modal.querySelector("img")?.src || "")
-            : "";
           resultUrls.push(hdUrl);
           console.log("[stepWait] HD captured:", hdUrl.slice(0, 50), "total:", resultUrls.length);
           tryIndex = 0; // Reset for next image

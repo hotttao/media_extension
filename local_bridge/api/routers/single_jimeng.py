@@ -173,21 +173,25 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
     client: MediaAIClient = request.app.state.media_ai_client
     cookie = client.resolve_cookie(request.headers.get("Cookie"))
 
-    product_id = body.productId
-    if not product_id:
-        raise HTTPException(status_code=400, detail="productId is required")
-
-    resolved_product_id = str(product_id)
-    resolved_ip_id = str(body.ipId) if body.ipId else None
+    # productId is optional — can be inferred from firstFrameId
     resolved_first_frame_id = str(body.firstFrameId) if body.firstFrameId else None
+    resolved_ip_id = str(body.ipId) if body.ipId else None
 
     first_frame_url = ""
     first_frame_path = None
     first_frame_media_url = ""
+    first_frame_product_id = ""
+
     if resolved_first_frame_id:
         first_frame = client.fetch_first_frame(resolved_first_frame_id)
         if first_frame:
             first_frame_url = str(first_frame.get("url") or "")
+            first_frame_product_id = str(first_frame.get("productId") or "")
+
+    # Infer productId from firstFrameId if not provided
+    resolved_product_id = str(product_id) if product_id else first_frame_product_id
+    if not resolved_product_id:
+        raise HTTPException(status_code=400, detail="productId is required (or firstFrameId must have productId)")
 
     job_id = (
         f"jimeng-vid-{resolved_product_id[:8]}"
@@ -210,7 +214,7 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
     if body.prompt:
         prompt_text = body.prompt
     else:
-        prompt_path = Path("D:/Code/media/gpt_image2/prompts/09_即梦文生视频")
+        prompt_path = Path("D:/Code/media/gpt_image2/prompts/06_文生视频提示词.md")
         prompt_text = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
 
     case_path = input_dir / "task.md"
