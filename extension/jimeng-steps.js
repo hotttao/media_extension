@@ -649,23 +649,33 @@
     // Main loop: collect up to 4 HD images by clicking each thumbnail in order
     const resultUrls = [];
     let tryIndex = 0;
+    let firstWaitDone = false;
 
     while (Date.now() < deadline && resultUrls.length < 4) {
       const thumbnails = getThumbnailImages();
-      console.log("[stepWait] thumbnails:", thumbnails.length, "captured:", resultUrls.length, "next index:", tryIndex);
 
       if (thumbnails.length === 0) {
-        console.log("[stepWait] no thumbnails yet, waiting 60s...");
-        await delay(60000);  // wait 1 min before first retry
-        tryIndex = 0;
-        continue;
+        if (!firstWaitDone) {
+          console.log("[stepWait] no thumbnails yet, waiting 80s for first generation...");
+          await delay(80000);
+          firstWaitDone = true;
+          tryIndex = 0;
+          continue;
+        } else {
+          console.log("[stepWait] no thumbnails, retrying in 10s...");
+          await delay(10000);
+          tryIndex = 0;
+          continue;
+        }
       }
+
+      console.log("[stepWait] thumbnails:", thumbnails.length, "captured:", resultUrls.length, "next index:", tryIndex);
 
       // Try the next uncaptured thumbnail
       if (tryIndex >= thumbnails.length) {
-        console.log("[stepWait] all thumbnails tried, waiting 5s before retry...");
+        console.log("[stepWait] all thumbnails tried, waiting 10s before retry...");
         tryIndex = 0;
-        await delay(5000);  // wait 5s between retry cycles
+        await delay(10000);
         continue;
       }
 
@@ -684,7 +694,7 @@
         console.log("[stepWait] card", tryIndex, "error:", e.message);
         document.body.click();
         tryIndex++;
-        await delay(2000);
+        await delay(10000);
       }
     }
 
