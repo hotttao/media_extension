@@ -224,15 +224,15 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
     if body.movementId:
         movement = client.fetch_movement(str(body.movementId))
         if movement:
-            movement_text = str(movement.get("name") or "") or str(movement.get("description") or "")
+            movement_text = str(movement.get("content") or "")
     if movement_text:
         prompt_text = prompt_text.replace("{{ 动作细节 }}", movement_text)
     else:
         prompt_text = prompt_text.replace("{{ 动作细节 }}", "[动作描述待填入]")
     case_path = input_dir / "task.md"
-    lines = [f"# jimeng video / product {resolved_product_id}"]
-    if first_frame_path and first_frame_path.exists():
-        lines.extend(["", f"[首帧图]({first_frame_path.relative_to(input_dir).as_posix()})", ""])
+    lines = []
+    # if first_frame_path and first_frame_path.exists():
+    #     lines.extend(["", f"[首帧图]({first_frame_path.relative_to(input_dir).as_posix()})", ""])
     lines.extend(["", prompt_text, ""])
     case_path.write_text("\n".join(lines), encoding="utf-8")
 
