@@ -566,61 +566,85 @@
       });
     };
 
-    // Helper: click a thumbnail to open detail modal, return HD URL if ready.
-    // Clicks thumbnail → immediately polls for a CDN image NOT yet in seenModalSrcs.
-    // seenModalSrcs: all img URLs ever seen in ANY modal in this session (accumulates
-    // across all cards). This prevents re-capturing the same image when the modal
-    // briefly shows the previous card's images before switching to the new one.
-    const tryGetHdFromCard = (imgEl) => {
+    // Open modal by clicking a grid thumbnail, wait for it to appear
+    const openModal = (gridThumb) => {
       return new Promise((resolve) => {
-        document.body.click(); // close any open modal first
-        imgEl.click();
-
+        document.body.click(); // close any open modal
+        gridThumb.click();
         let attempts = 0;
-        const maxAttempts = 90; // 90 * 500ms = 45s per card
-        const pollInterval = setInterval(() => {
+        const maxWait = 60;
+        const check = setInterval(() => {
           attempts++;
           const modal = document.querySelector(".lv-modal-wrapper");
-          if (!modal) {
-            if (attempts >= maxAttempts) {
-              clearInterval(pollInterval);
-              document.body.click();
-              setTimeout(() => resolve(null), 100);
-            }
-            return;
-          }
-          const modalImgs = Array.from(modal.querySelectorAll("img"));
-          if (attempts <= 3 || attempts % 20 === 0) {
-            console.log("[stepWait] modal[" + attempts + "]: " + modalImgs.length + " imgs, " +
-              modalImgs.slice(0, 3).map(function(img) {
-                try {
-                  return "w=" + Math.round(img.getBoundingClientRect().width) + " src=" + img.src.slice(0, 50) + " isData=" + (img.src.startsWith("data:") ? "1" : "0") + " isBlob=" + (img.src.startsWith("blob:") ? "1" : "0");
-                } catch(e) { return "ERROR"; }
-              }).join(" | ")
-            );
-          }
-          const hdImg = modalImgs.find(img => {
-            try {
-              const w = img.getBoundingClientRect().width;
-              const src = img.src;
-              // Must be wider than 300px, a real CDN URL, and not already seen in this session
-              return w > 300 && src.startsWith("http") && !src.startsWith("data:") && !src.startsWith("blob:");
-            } catch { return false; }
-          });
-          if (hdImg) {
-            clearInterval(pollInterval);
-            const hdUrl = hdImg.src;
-            console.log("[stepWait] HD found:", hdUrl.slice(0, 60), "w:", Math.round(hdImg.getBoundingClientRect().width));
-            document.body.click();
-            setTimeout(() => resolve(hdUrl), 200);
-          } else if (attempts >= maxAttempts) {
-            clearInterval(pollInterval);
-            document.body.click();
-            setTimeout(() => resolve(null), 100);
-          }
+          if (modal) { clearInterval(check); setTimeout(() => resolve(modal), 800); }
+          else if (attempts >= maxWait) { clearInterval(check); resolve(null); }
         }, 500);
       });
     };
+
+    // Find thumbnail switcher images inside an open modal (top-right scroll container)
+    const getModalThumbs = (modal) => {
+      const scroll = modal.querySelector('[class*="scroll-container"]');
+      if (!scroll) return [];
+      return Array.from(scroll.querySelectorAll("img")).filter(img => {
+        if (!img.src || img.src.startsWith("data:") || img.src.startsWith("blob:")) return false;
+        if (!img.src.includes("byteimg.com")) return false;
+        if (img.src.includes("mosaic") || img.src.includes("avatar")) return false;
+        return true;
+      });
+    };
+
+    // Wait for HD image in open modal (first CDN img with w > 300)
+    const pollModalHd = (modal) => {
+      return new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 90;
+        const interval = setInterval(() => {
+          attempts++;
+          const imgs = Array.from(modal.querySelectorAll("img"));
+          const hd = imgs.find(img => {
+            try { return img.getBoundingClientRect().width > 300 && img.src.startsWith("http") && !img.src.startsWith("data:") && !img.src.startsWith("blob:"); }
+            catch { return false; }
+          });
+          if (hd) { clearInterval(interval); resolve(hd.src); }
+          else if (attempts >= maxAttempts) { clearInterval(interval); resolve(null); }
+        }, 500);
+      });
+    };
+
+    // Click grid thumbnail -> open modal -> click each modal thumbnail to switch images
+    // Returns array of HD URLs captured from this grid thumbnail's modal
+    const captureModalImages = (gridThumb) => {
+      return new Promise(async (resolve) => {
+        const modal = await openModal(gridThumb);
+        if (!modal) { resolve([]); return; }
+
+        const modalThumbs = getModalThumbs(modal);
+        const captured = [];
+
+        if (modalThumbs.length === 0) {
+          // No thumbnail switcher - just capture the one image in modal
+          const hd = await pollModalHd(modal);
+          if (hd) captured.push(hd);
+          document.body.click();
+          resolve(captured);
+          return;
+        }
+
+        // Click each modal thumbnail to switch to a different image
+        for (let i = 0; i < modalThumbs.length; i++) {
+          modalThumbs[i].click();
+          await delay(1200); // wait for image to switch in modal
+          const hd = await pollModalHd(modal);
+          if (hd) captured.push(hd);
+          if (captured.length >= 4) break;
+        }
+
+        document.body.click();
+        resolve(captured);
+      });
+    };
+
 
     // Main loop: collect up to 4 HD images by clicking each thumbnail in order
     const resultUrls = [];
@@ -646,23 +670,21 @@
       }
 
       const target = thumbnails[tryIndex];
-      console.log("[stepWait] attempting HD extraction from card", tryIndex, "...");
+      console.log("[stepWait] clicking grid thumbnail[" + tryIndex + "], src=" + (target ? target.src.slice(0, 50) : "null"));
 
       try {
-        const hdUrl = await tryGetHdFromCard(target);
-        if (hdUrl) {
-          resultUrls.push(hdUrl);
-          console.log("[stepWait] HD captured:", hdUrl.slice(0, 50), "total:", resultUrls.length);
-          tryIndex = 0; // Reset for next image
-        } else {
-          console.log("[stepWait] card", tryIndex, "not ready, waiting 2s then next...");
-          await delay(2000);  // wait 2s between retry
-          tryIndex++;
+        const urls = await captureModalImages(target);
+        if (urls.length > 0) {
+          urls.forEach(url => { resultUrls.push(url); });
+          console.log("[stepWait] captured", urls.length, "from modal, total:", resultUrls.length);
+          if (resultUrls.length >= 4) break;
         }
+        tryIndex++; // move to next grid thumbnail
       } catch(e) {
         console.log("[stepWait] card", tryIndex, "error:", e.message);
-        await delay(2000);
+        document.body.click();
         tryIndex++;
+        await delay(2000);
       }
     }
 
@@ -693,7 +715,7 @@
   async function stepVideoTab() {
     if (window.location.href.includes("type=video")) {
       try {
-        waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
+        await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
         return { ok: true, data: { status: "already_on_video_tab" }, error: null };
       } catch {
         return { ok: false, data: null, error: "type=video page loaded but combobox not found" };
@@ -722,8 +744,8 @@
       });
       if (!clicked) return { ok: false, data: null, error: "视频生成 tab not found" };
       await delay(1000);
-      waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
-      waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
+      await waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
+      await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
       return { ok: true, data: { status: "clicked_via_evaluate" }, error: null };
     }
 
@@ -740,7 +762,7 @@
           textLike(el.textContent, "视频生成") && isVisible(el) && el !== tab
         );
         if (secondClick) { secondClick.click(); }
-        waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
+        await waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
         return { ok: true, data: { status: "parent_then_option", parentTag: parentClickable.tagName }, error: null };
       }
       tab.click();
@@ -749,12 +771,12 @@
         textLike(el.textContent, "视频生成") && isVisible(el) && el !== tab
       );
       if (option) { option.click(); }
-      waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
+      await waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
       return { ok: true, data: { status: "trigger_then_option" }, error: null };
     }
 
     tab.click();
-    waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
+    await waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
     return { ok: true, data: { status: "menu_item_clicked" }, error: null };
   }
 
@@ -763,7 +785,7 @@
     const delayMs = 500;
 
     try {
-      waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 20000, label: "model_combobox" });
+      await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 20000, label: "model_combobox" });
     } catch {
       const comboboxes = Array.from(document.querySelectorAll('[role="combobox"]'));
       const comboboxTexts = comboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
@@ -1008,7 +1030,7 @@
   async function stepVideoGenerate() {
     const delayMs = 200;
 
-    const enabledBtn = waitFor(() => {
+    const enabledBtn = await waitFor(() => {
       const btn = document.querySelector("button.lv-btn-primary:not([disabled])");
       return btn || null;
     }, { timeoutMs: 300000, label: "lv-btn-primary_enabled" });
@@ -1103,7 +1125,7 @@
       viewBtn.click();
       await delay(2000);
 
-      const videoEl = waitFor(() => {
+      const videoEl = await waitFor(() => {
         const v = document.querySelector("video");
         return (v && v.src && !v.src.startsWith("data:") && !v.src.startsWith("blob:")) ? v : null;
       }, { timeoutMs: 30000, label: "video_element_after_view" });
