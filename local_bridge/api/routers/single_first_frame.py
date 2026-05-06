@@ -59,7 +59,6 @@ def create_first_frame_image(body: FirstFrameImageCreateRequest, request: Reques
             style_image_id=style_image_id_str,
             scene_id=scene_id_str,
             output_root=output_root,
-            job_id=job_id,
             prompt=prompt,
             force=force,
         )
