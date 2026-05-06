@@ -275,34 +275,37 @@ class Test_save_media_ai_generated_image:
 
 class Test_save_media_ai_generated_video:
     def test_jimeng_video_upload_and_save(self, tmp_path: pathlib.Path) -> None:
-        """Multipart POST /api/products/{productId}/videos with file, firstFrameId, movementId, subDir."""
+        """Multipart POST /api/products/{productId}/videos with real jimeng sidecar data."""
         cookie = _get_cookie()
-        mp4_bytes = b"\x00\x00\x00\x1cftypmp42\x00\x00\x00\x00isommp42"
-        video_path = tmp_path / "generated.mp4"
-        video_path.write_bytes(mp4_bytes)
+        video_path = pathlib.Path(
+            "D:/Code/media/gpt_image2/runs/jimeng-vid-38135282-ip-981cd79c-ff-b845eb38/output/video-01.mp4"
+        )
+        if not video_path.exists():
+            # Fallback: generate a minimal mp4
+            mp4_bytes = b"\x00\x00\x00\x1cftypmp42\x00\x00\x00\x00isommp42"
+            video_path = tmp_path / "video-01.mp4"
+            video_path.write_bytes(mp4_bytes)
 
         job = Job(
-            id="test-jimeng-video-001",
+            id="jimeng-vid-38135282-ip-981cd79c-ff-b845eb38",
             case_file=pathlib.Path("test/task.md"),
             prompt="test",
             assets=[],
-            output_dir=tmp_path / "output",
+            output_dir=video_path.parent,
             media_ai={
-                "baseUrl": MEDIA_AI_BASE_URL,
+                "baseUrl": "http://localhost:3000",
                 "kind": "video",
-                "productId": "prod_test_001",
-                "ipId": "ip_test_001",
-                "firstFrameId": "ff_test_001",
-                "movementId": "mv_test_001",
+                "platform": "jimeng",
+                "productId": "3813528280213094793",
+                "ipId": "981cd79c-5973-429a-8edf-dff3eda45014",
+                "firstFrameId": "b845eb38-d51b-49f9-8f23-1702d04dfd9b",
+                "movementId": "0b8925cf-c3db-4488-9623-261a20b2ffd8",
                 "cookie": cookie,
             },
         )
 
-        try:
-            result = save_media_ai_generated_video(job, video_path)
-            assert result is not None
-            assert result["kind"] == "video"
-            assert "saved" in result, f"Expected 'saved' in result: {result}"
-        except RuntimeError as e:
-            # Save may fail with 4xx if product doesn't exist
-            assert "videos" in str(e), f"Expected 'videos' in error: {e}"
+        result = save_media_ai_generated_video(job, video_path)
+        assert result is not None
+        assert result["kind"] == "video"
+        assert "saved" in result
+        assert "videoId" in result["saved"], f"Expected videoId in saved: {result['saved']}"
