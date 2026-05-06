@@ -716,6 +716,8 @@
   async function stepVideoNav(targetUrl) {
     if (window.location.href !== targetUrl) {
       window.location.href = targetUrl;
+      // Wait for navigation to complete before returning
+      await waitFor(() => window.location.href === targetUrl, { timeoutMs: 30000, label: "video_page_navigated" });
       return { ok: true, data: { status: "navigating" }, error: null };
     }
     return { ok: true, data: { status: "already_on_page", url: window.location.href }, error: null };
