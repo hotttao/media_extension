@@ -713,14 +713,17 @@
   // ---------------------------------------------------------------------------
 
   // S1V: Navigate to jimeng video URL
+  const VIDEO_HARDCODE_URL = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=undefined";
+
   async function stepVideoNav(targetUrl) {
-    if (window.location.href !== targetUrl) {
-      window.location.href = targetUrl;
-      // Wait for navigation to complete before returning
-      await waitFor(() => window.location.href === targetUrl, { timeoutMs: 30000, label: "video_page_navigated" });
-      return { ok: true, data: { status: "navigating" }, error: null };
+    if (!window.location.href.includes("type=video")) {
+      window.location.href = VIDEO_HARDCODE_URL;
+      // Wait for URL to contain type=video (navigation completes when page loads)
+      await waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 60000, label: "video_page_navigated" });
     }
-    return { ok: true, data: { status: "already_on_page", url: window.location.href }, error: null };
+    // Wait for page DOM to be ready (comboboxes appear)
+    await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 60000, label: "page_ready" });
+    return { ok: true, data: { status: "navigated", url: window.location.href }, error: null };
   }
 
   // S2V: Click "视频生成" tab (skip if already on type=video page)
