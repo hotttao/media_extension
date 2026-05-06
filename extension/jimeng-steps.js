@@ -689,7 +689,7 @@
   async function stepVideoNav(targetUrl) {
     if (window.location.href !== targetUrl) {
       window.location.href = targetUrl;
-      return { ok: false, data: { status: "navigating" }, error: null };
+      return { ok: true, data: { status: "navigating" }, error: null };
     }
     return { ok: true, data: { status: "already_on_page", url: window.location.href }, error: null };
   }
