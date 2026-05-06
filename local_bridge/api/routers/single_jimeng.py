@@ -174,6 +174,7 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
     cookie = client.resolve_cookie(request.headers.get("Cookie"))
 
     # productId is optional — can be inferred from firstFrameId
+    resolved_product_id = str(body.productId) if body.productId else None
     resolved_first_frame_id = str(body.firstFrameId) if body.firstFrameId else None
     resolved_ip_id = str(body.ipId) if body.ipId else None
 
@@ -189,7 +190,8 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
             first_frame_product_id = str(first_frame.get("productId") or "")
 
     # Infer productId from firstFrameId if not provided
-    resolved_product_id = str(product_id) if product_id else first_frame_product_id
+    if not resolved_product_id:
+        resolved_product_id = first_frame_product_id
     if not resolved_product_id:
         raise HTTPException(status_code=400, detail="productId is required (or firstFrameId must have productId)")
 
@@ -216,6 +218,17 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
     else:
         prompt_path = Path("D:/Code/media/gpt_image2/prompts/06_文生视频提示词.md")
         prompt_text = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
+
+    # Replace {{ 动作细节 }} placeholder with movement description
+    movement_text = ""
+    if body.movementId:
+        pose = client.fetch_pose(str(body.movementId))
+        if pose:
+            movement_text = str(pose.get("name") or "") or str(pose.get("description") or "") or str(pose.get("movement") or "")
+    if movement_text:
+        prompt_text = prompt_text.replace("{{ 动作细节 }}", movement_text)
+    else:
+        prompt_text = prompt_text.replace("{{ 动作细节 }}", "[动作描述待填入]")
 
     case_path = input_dir / "task.md"
     lines = [f"# jimeng video / product {resolved_product_id}"]

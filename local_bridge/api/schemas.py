@@ -177,7 +177,7 @@ class JimengImageCreateRequest(BaseModel):
 
 
 class JimengVideoCreateRequest(BaseModel):
-    productId: str
+    productId: str | None = None
     ipId: str | None = None
     firstFrameId: str | None = None
     movementId: str | None = None
