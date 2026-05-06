@@ -716,10 +716,11 @@
   const VIDEO_HARDCODE_URL = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=undefined";
 
   async function stepVideoNav(targetUrl) {
-    if (!window.location.href.includes("type=video")) {
-      window.location.href = VIDEO_HARDCODE_URL;
-      // Wait for URL to contain type=video (navigation completes when page loads)
-      await waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 60000, label: "video_page_navigated" });
+    const target = VIDEO_HARDCODE_URL;
+    if (window.location.href !== target) {
+      window.location.href = target;
+      // Wait for exact URL match — ensures page has fully loaded before returning
+      await waitFor(() => window.location.href === target, { timeoutMs: 60000, label: "video_page_navigated" });
     }
     // Wait for page DOM to be ready (comboboxes appear)
     await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 60000, label: "page_ready" });
