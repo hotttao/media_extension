@@ -448,6 +448,13 @@ class MediaAIClient:
         except Exception:
             return None
 
+    def fetch_movement(self, movement_id: str) -> dict | None:
+        """Fetch a movement by ID via GET /api/movements/{id}."""
+        try:
+            return self.request_json("GET", f"/api/movements/{movement_id}")
+        except Exception:
+            return None
+
     def fetch_pose(self, pose_id: str) -> dict | None:
         """Fetch a POSE material by ID."""
         try:

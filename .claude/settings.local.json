@@ -178,7 +178,9 @@
       "Bash(PYTHONPATH=. uv run pytest tests/test_http_layer.py tests/test_media_ai_client.py -v)",
       "Bash(PYTHONPATH=. uv run python -m pytest tests/test_http_layer.py::Test_save_media_ai_generated_image::test_jimeng_first_frame_upload_with_real_files -v)",
       "Bash(git -C:*)",
-      "Bash(PYTHONPATH=. uv run pytest tests/test_http_layer.py::Test_save_media_ai_generated_image::test_jimeng_first_frame_upload_with_real_files -v)"
+      "Bash(PYTHONPATH=. uv run pytest tests/test_http_layer.py::Test_save_media_ai_generated_image::test_jimeng_first_frame_upload_with_real_files -v)",
+      "Bash(PYTHONPATH=. uv run pytest tests/ -v --tb=no)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_utils.py -v --tb=short)"
     ]
   }
 }
