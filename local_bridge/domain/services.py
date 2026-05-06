@@ -340,7 +340,7 @@ def save_media_ai_generated_images_batch(job, output_paths: list[pathlib.Path]) 
 
 
 def save_media_ai_generated_video(job, output_path: pathlib.Path) -> dict[str, Any] | None:
-    """Upload and save a generated video to Media AI."""
+    """Save a generated video to Media AI via multipart POST /api/products/{productId}/videos."""
     if not job.media_ai:
         return None
     job.output_dir.mkdir(parents=True, exist_ok=True)
@@ -350,33 +350,64 @@ def save_media_ai_generated_video(job, output_path: pathlib.Path) -> dict[str, A
     if not product_id:
         raise RuntimeError("Media AI video sidecar requires productId.")
 
-    upload_result = upload_file_multipart(
-        f"{base_url}/api/upload", cookie=cookie, file_path=output_path, sub_dir="videos"
-    )
-    video_url = ensure_text(upload_result.get("url") or "")
-    if not video_url:
-        raise RuntimeError(f"Media AI upload response did not include url: {upload_result}")
-
-    ip_id = ensure_text(job.media_ai.get("ipId") or "") or None
     first_frame_id = ensure_text(job.media_ai.get("firstFrameId") or "") or None
-    movement = ensure_text(job.media_ai.get("movement") or "") or None
+    movement_id = ensure_text(job.media_ai.get("movementId") or "") or None
 
-    save_body: dict[str, Any] = {"url": video_url}
-    if ip_id:
-        save_body["ipId"] = ip_id
-    if first_frame_id:
-        save_body["firstFrameId"] = first_frame_id
-    if movement:
-        save_body["movement"] = movement
+    # Build multipart request: file + firstFrameId + movementId + subDir
+    boundary = f"----codex-{uuid.uuid4().hex}"
+    file_bytes = output_path.read_bytes()
+    mime_type = guess_mime_type(output_path)
+    fields: list[tuple[str, str] | tuple[str, str, bytes]] = [
+        ("file", output_path.name, file_bytes, mime_type),
+        ("firstFrameId", first_frame_id or ""),
+        ("movementId", movement_id or ""),
+        ("subDir", "videos"),
+    ]
+    body_parts: list[bytes] = []
+    for field in fields:
+        if len(field) == 4:
+            name, filename, data, content_type = field
+            header = (
+                f"--{boundary}\r\n"
+                f"Content-Disposition: form-data; name=\"{name}\"; filename=\"{filename}\"\r\n"
+                f"Content-Type: {content_type}\r\n\r\n"
+            )
+            body_parts.append(header.encode("utf-8"))
+            body_parts.append(data)
+            body_parts.append(b"\r\n")
+        else:
+            name, value = field
+            header = f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n"
+            body_parts.append(header.encode("utf-8"))
+            body_parts.append(value.encode("utf-8"))
+            body_parts.append(b"\r\n")
+    body_parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+    body = b"".join(body_parts)
 
     save_url = f"{base_url}/api/products/{product_id}/videos"
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(body)),
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+
     save_payload_file = job.output_dir / "media-ai-save.json"
     write_json(save_payload_file, {
         "kind": "video",
         "save_url": save_url,
-        "save_body": save_body,
         "output_path": str(output_path),
-        "video_url": video_url,
     })
-    save_result = request_json("POST", save_url, cookie=cookie, body=save_body)
-    return {"kind": "video", "uploaded": upload_result, "saved": save_result}
+
+    try:
+        request = Request(save_url, data=body, headers=headers, method="POST")
+        with urlopen(request, timeout=120) as response:
+            raw = response.read().decode("utf-8")
+            result = json.loads(raw) if raw else {}
+            return {"kind": "video", "saved": result}
+    except HTTPError as error:
+        raw = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"POST {save_url} failed with HTTP {error.code}: {raw}") from error
+    except URLError as error:
+        raise RuntimeError(f"POST {save_url} failed: {error.reason}") from error
