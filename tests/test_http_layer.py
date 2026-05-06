@@ -275,7 +275,7 @@ class Test_save_media_ai_generated_image:
 
 class Test_save_media_ai_generated_video:
     def test_jimeng_video_upload_and_save(self, tmp_path: pathlib.Path) -> None:
-        """Upload flow: upload succeeds. Save may fail with 4xx if product doesn't exist."""
+        """Multipart POST /api/products/{productId}/videos with file, firstFrameId, movementId, subDir."""
         cookie = _get_cookie()
         mp4_bytes = b"\x00\x00\x00\x1cftypmp42\x00\x00\x00\x00isommp42"
         video_path = tmp_path / "generated.mp4"
@@ -293,7 +293,7 @@ class Test_save_media_ai_generated_video:
                 "productId": "prod_test_001",
                 "ipId": "ip_test_001",
                 "firstFrameId": "ff_test_001",
-                "movement": "测试动作",
+                "movementId": "mv_test_001",
                 "cookie": cookie,
             },
         )
@@ -302,7 +302,7 @@ class Test_save_media_ai_generated_video:
             result = save_media_ai_generated_video(job, video_path)
             assert result is not None
             assert result["kind"] == "video"
-            assert "uploaded" in result
+            assert "saved" in result, f"Expected 'saved' in result: {result}"
         except RuntimeError as e:
-            # Save may fail with 4xx if product doesn't exist — still validates upload
-            assert "uploaded" in str(e) or "videos" in str(e)
+            # Save may fail with 4xx if product doesn't exist
+            assert "videos" in str(e), f"Expected 'videos' in error: {e}"
