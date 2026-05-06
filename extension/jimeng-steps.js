@@ -2038,6 +2038,19 @@
       }) || null;
     };
 
+    const findDirectResultTrigger = () => {
+      const videoEl = Array.from(document.querySelectorAll("video")).find(isVisible);
+      if (videoEl) {
+        return videoEl.closest("a, button, [role='button']") || videoEl;
+      }
+      const videoLink = Array.from(document.querySelectorAll("a[href]")).find((el) => {
+        if (!isVisible(el)) return false;
+        const href = el.href || "";
+        return /\.(mp4|webm)(\?|$)/i.test(href) || /video/i.test(href);
+      });
+      return videoLink || null;
+    };
+
     const hasPendingGenerationText = () => {
       const pendingTexts = ["生成中", "排队中", "处理中", "预计", "等待中"];
       const candidates = Array.from(document.querySelectorAll("div, span, p, button")).filter(isVisible);
@@ -2095,6 +2108,9 @@
     while (Date.now() < deadline) {
       const now = Date.now();
       const resultAction = findResultAction();
+      const candidates = collectVideoCandidates();
+      const current = candidates[0];
+      const pending = hasPendingGenerationText();
 
       if (!enteredResult && resultAction && now - lastViewClickAt >= 5000) {
         clickElement(resultAction);
@@ -2107,13 +2123,28 @@
         continue;
       }
 
+      if (!enteredResult && !resultAction && current && !pending) {
+        const directTrigger = findDirectResultTrigger();
+        if (directTrigger && now - lastViewClickAt >= 5000) {
+          clickElement(directTrigger);
+          lastViewClickAt = now;
+          console.log("[stepVideoWait] clicked direct result trigger");
+          await delay(1500);
+          if (collectVideoCandidates().length > 0) {
+            enteredResult = true;
+          }
+          continue;
+        }
+        enteredResult = true;
+        lastCandidateKey = "";
+        stableSince = 0;
+        console.log("[stepVideoWait] no result action; accepting direct video result state");
+      }
+
       if (!enteredResult) {
         await delay(POLL_INTERVAL_MS);
         continue;
       }
-
-      const candidates = collectVideoCandidates();
-      const current = candidates[0];
 
       if (current) {
         const key = `${current.sourceType}:${current.videoUrl}`;
@@ -2121,7 +2152,7 @@
           lastCandidateKey = key;
           stableSince = Date.now();
           console.log("[stepVideoWait] candidate changed:", current.sourceType, current.videoUrl.slice(0, 80));
-        } else if (Date.now() - stableSince >= STABLE_THRESHOLD_MS && !hasPendingGenerationText()) {
+        } else if (Date.now() - stableSince >= STABLE_THRESHOLD_MS && !pending) {
           return { ok: true, data: current, error: null };
         }
       }
