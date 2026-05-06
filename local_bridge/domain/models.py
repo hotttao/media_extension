@@ -71,6 +71,16 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def asset_from_path(path: pathlib.Path, label: str) -> dict[str, Any]:
+    return {
+        "label": label,
+        "path": path,
+        "name": path.name,
+        "mimeType": guess_mime_type(path),
+        "sha256": sha256_bytes(path.read_bytes()),
+    }
+
+
 def ensure_text(value: Any) -> str:
     if isinstance(value, str):
         return value
@@ -164,15 +174,7 @@ def replace_image_links(markdown_text: str, case_dir: pathlib.Path) -> tuple[str
         if resolved not in seen_paths:
             seen_paths.add(resolved)
             asset_positions[resolved] = len(assets) + 1
-            assets.append(
-                {
-                    "label": label,
-                    "path": resolved,
-                    "name": resolved.name,
-                    "mimeType": guess_mime_type(resolved),
-                    "sha256": sha256_bytes(resolved.read_bytes()),
-                }
-            )
+            assets.append(asset_from_path(resolved, label))
 
         asset_index = asset_positions[resolved]
         return f"{label}（见附件{asset_index}）"
@@ -185,6 +187,22 @@ def load_case_file(case_path: pathlib.Path) -> tuple[str, list[dict[str, Any]]]:
     markdown_text = case_path.read_text(encoding="utf-8")
     prompt, assets = replace_image_links(markdown_text, case_path.parent)
     return prompt, assets
+
+
+def load_video_assets(case_path: pathlib.Path) -> list[dict[str, Any]]:
+    assets_dir = case_path.parent / "assets"
+    if not assets_dir.exists():
+        return []
+
+    assets: list[dict[str, Any]] = []
+    for stem, label in (("first-frame", "firstFrame"), ("last-frame", "lastFrame")):
+        matches = sorted(
+            path for path in assets_dir.iterdir()
+            if path.is_file() and path.stem.lower() == stem and path.suffix.lower() in IMAGE_SUFFIXES
+        )
+        if matches:
+            assets.append(asset_from_path(matches[0].resolve(), label))
+    return assets
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +224,8 @@ def build_jobs(case_paths: list[pathlib.Path], output_root: pathlib.Path, start_
             if kind == "video":
                 platform = "jimeng"
                 target_url = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
+                if not assets:
+                    assets = load_video_assets(case_path)
             elif kind in ("first-frame-image", "style-image", "model-image"):
                 # platform can be set explicitly in sidecar (Jimeng sets platform="jimeng")
                 # otherwise default to GPT

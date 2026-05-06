@@ -113,6 +113,28 @@ class Test_build_jobs:
         assert jobs[0].platform == "jimeng"
         assert jobs[0].target_url == "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0"
 
+    def test_jimeng_video_job_loads_first_frame_from_assets_dir(self, tmp_path: pathlib.Path) -> None:
+        job_dir = tmp_path / "jimeng-vid-test"
+        input_dir = job_dir / "input"
+        assets_dir = input_dir / "assets"
+        assets_dir.mkdir(parents=True)
+
+        case_path = input_dir / "task.md"
+        case_path.write_text("video prompt only", encoding="utf-8")
+        case_path.with_suffix(".media-ai.json").write_text(
+            '{"kind": "video", "productId": "p", "ipId": "i", "firstFrameId": "ff"}',
+            encoding="utf-8",
+        )
+        (assets_dir / "first-frame.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+
+        jobs = build_jobs([case_path], tmp_path / "output")
+
+        assert len(jobs) == 1
+        assert jobs[0].prompt == "video prompt only"
+        assert len(jobs[0].assets) == 1
+        assert jobs[0].assets[0]["label"] == "firstFrame"
+        assert jobs[0].assets[0]["name"] == "first-frame.png"
+
     def test_job_id_format(self, tmp_path: pathlib.Path) -> None:
         case_dir = tmp_path / "my-case"
         case_dir.mkdir()

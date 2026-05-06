@@ -6,6 +6,27 @@ const PLATFORMS = [
 
 const controllerState = {};
 
+function renderSettingsPanel() {
+  return `
+    <div class="settings-panel">
+      <div class="settings-header">Settings</div>
+      <div class="settings-body">
+        <label class="setting-row">
+          <input
+            id="confirm-before-video-generate"
+            type="checkbox"
+            ${controllerState.confirmBeforeVideoGenerate ? "checked" : ""}
+          >
+          <span class="setting-copy">
+            <span class="setting-title">Confirm Before Jimeng Video Generate</span>
+            <span class="setting-help">Pause before the paid generate click so you can verify model, ratio, frames, movement, and prompt.</span>
+          </span>
+        </label>
+      </div>
+    </div>
+  `;
+}
+
 function renderPlatformSection(platform) {
   const state = controllerState[platform.id] || {
     running: false,
@@ -41,7 +62,21 @@ function renderPlatformSection(platform) {
 
 function render() {
   const container = document.getElementById("platforms");
-  container.innerHTML = PLATFORMS.map(renderPlatformSection).join("");
+  container.innerHTML = renderSettingsPanel() + PLATFORMS.map(renderPlatformSection).join("");
+
+  const confirmToggle = document.getElementById("confirm-before-video-generate");
+  if (confirmToggle) {
+    confirmToggle.addEventListener("change", async () => {
+      const response = await chrome.runtime.sendMessage({
+        type: "popup:updateSettings",
+        confirmBeforeVideoGenerate: confirmToggle.checked,
+      });
+      if (response?.state) {
+        mergeState(response.state);
+        render();
+      }
+    });
+  }
 
   // Bind event listeners
   container.querySelectorAll(".start-btn").forEach((btn) => {

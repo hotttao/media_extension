@@ -1,9 +1,11 @@
 const DEFAULT_SERVER_URL = "http://127.0.0.1:8765";
+const SETTINGS_SCHEMA_VERSION = 4;
 
 const controllerState = {
   running: false,
   busy: false,
   serverUrl: DEFAULT_SERVER_URL,
+  confirmBeforeVideoGenerate: false,
   currentJobId: null,
   lastMessage: "Idle",
   lastError: null,
@@ -12,16 +14,28 @@ const controllerState = {
 
 let controllerLoopRunning = false;
 let stopRequested = false;
+const USER_ABORTED_VIDEO_GENERATE_CONFIRMATION = "USER_ABORTED_VIDEO_GENERATE_CONFIRMATION";
 
 async function loadSettings() {
-  const stored = await chrome.storage.local.get(["serverUrl"]);
+  const stored = await chrome.storage.local.get(["serverUrl", "confirmBeforeVideoGenerate", "settingsSchemaVersion"]);
   if (stored.serverUrl) {
     controllerState.serverUrl = stored.serverUrl;
+  }
+  if (typeof stored.confirmBeforeVideoGenerate === "boolean") {
+    controllerState.confirmBeforeVideoGenerate = stored.confirmBeforeVideoGenerate;
+  }
+  if (!stored.settingsSchemaVersion || stored.settingsSchemaVersion < SETTINGS_SCHEMA_VERSION) {
+    controllerState.confirmBeforeVideoGenerate = false;
+    await saveSettings();
   }
 }
 
 async function saveSettings() {
-  await chrome.storage.local.set({ serverUrl: controllerState.serverUrl });
+  await chrome.storage.local.set({
+    serverUrl: controllerState.serverUrl,
+    confirmBeforeVideoGenerate: controllerState.confirmBeforeVideoGenerate,
+    settingsSchemaVersion: SETTINGS_SCHEMA_VERSION,
+  });
 }
 
 function broadcastState() {
@@ -127,27 +141,30 @@ async function runJobInFreshTab(job) {
   let windowId = null;
   let jobTimedOut = false;
   let jobSucceeded = false;
+  const effectiveJob = job?.targetUrl?.includes("type=video")
+    ? { ...job, confirmBeforeVideoGenerate: controllerState.confirmBeforeVideoGenerate }
+    : job;
 
   try {
-    const freshTarget = await openJobTab(job);
+    const freshTarget = await openJobTab(effectiveJob);
     tabId = freshTarget.tabId;
     windowId = freshTarget.windowId;
     controllerState.currentTabId = tabId;
-    controllerState.currentJobId = job.id;
+    controllerState.currentJobId = effectiveJob.id;
     controllerState.busy = true;
-    setStatus(`Running ${job.id}`);
+    setStatus(`Running ${effectiveJob.id}`);
 
     // Send job with timeout wrapper
     const sendJobWithTimeout = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         jobTimedOut = true;
-        reject(new Error(`Job ${job.id} timed out after ${JOB_RUN_TIMEOUT_MS / 1000}s`));
+        reject(new Error(`Job ${effectiveJob.id} timed out after ${JOB_RUN_TIMEOUT_MS / 1000}s`));
       }, JOB_RUN_TIMEOUT_MS);
 
       chrome.tabs.sendMessage(tabId, {
         type: "controller:runSingleJob",
         serverUrl: controllerState.serverUrl,
-        job,
+        job: effectiveJob,
       }).then((response) => {
         clearTimeout(timeout);
         // If content-script reports job failure (ok: false), treat as rejected
@@ -203,11 +220,15 @@ async function runControllerLoop() {
         await runJobInFreshTab(payload.job);
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        try {
-          await requeueJob(payload.job.id);
-          setStatus(`Requeued ${payload.job.id}`, reason);
-        } catch (_requeueError) {
-          setStatus(`Failed ${payload.job.id}`, reason);
+        if (reason.includes(USER_ABORTED_VIDEO_GENERATE_CONFIRMATION)) {
+          setStatus(`Aborted ${payload.job.id}`, "Video submission canceled before generate");
+        } else {
+          try {
+            await requeueJob(payload.job.id);
+            setStatus(`Requeued ${payload.job.id}`, reason);
+          } catch (_requeueError) {
+            setStatus(`Failed ${payload.job.id}`, reason);
+          }
         }
       }
     }
@@ -315,6 +336,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "popup:stop") {
     stopController()
       .then(() => sendResponse({ ok: true, state: controllerState }))
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+
+  if (message?.type === "popup:updateSettings") {
+    if (typeof message.confirmBeforeVideoGenerate === "boolean") {
+      controllerState.confirmBeforeVideoGenerate = message.confirmBeforeVideoGenerate;
+    }
+    saveSettings()
+      .then(() => {
+        broadcastState();
+        sendResponse({ ok: true, state: controllerState });
+      })
       .catch((error) => sendResponse({ ok: false, error: String(error) }));
     return true;
   }

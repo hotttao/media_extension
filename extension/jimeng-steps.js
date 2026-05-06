@@ -51,16 +51,138 @@
 
   const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-  const waitFor = (predicate, options = {}) => {
+  const waitFor = async (predicate, options = {}) => {
     const timeoutMs = options.timeoutMs ?? 120000;
     const intervalMs = options.intervalMs ?? 250;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      const value = predicate();
+      const value = await predicate();
       if (value) return value;
+      await delay(intervalMs);
     }
     throw new Error(`Timed out waiting for ${options.label || "condition"}`);
   };
+
+  const clickElement = (el) => {
+    if (!el) return false;
+    try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_error) {}
+    const eventInit = { bubbles: true, cancelable: true, view: window };
+    for (const type of ["pointerdown", "mousedown", "mouseup", "pointerup"]) {
+      try { el.dispatchEvent(new MouseEvent(type, eventInit)); } catch (_error) {}
+    }
+    try {
+      el.click();
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  };
+
+  const findVisibleTextTarget = (targetText) => {
+    const selectors = "button, [role='tab'], [role='menuitem'], [role='button'], a, label, div, span";
+    return Array.from(document.querySelectorAll(selectors)).find((el) => {
+      if (!isVisible(el)) return false;
+      const text = (el.textContent || "").trim();
+      return textLike(text, targetText) || textIncludes(text, targetText);
+    }) || null;
+  };
+
+  const getVisibleComboboxes = () => Array.from(document.querySelectorAll('[role="combobox"]')).filter(isVisible);
+
+  const getVisibleTextareas = () => Array.from(document.querySelectorAll("textarea")).filter(isVisible);
+
+  const findVideoFrameZone = (label) => {
+    const oppositeLabel = label === "首帧" ? "尾帧" : label === "尾帧" ? "首帧" : "";
+    const candidates = Array.from(document.querySelectorAll("[class*='reference-item'], [class*='reference-upload-'], [data-testid*='upload'], [class*='upload']"));
+    const scoredCandidates = candidates.map((candidate, index) => {
+      const ownText = (candidate.textContent || "").replace(/\s+/g, " ").trim();
+      const parentText = (candidate.parentElement?.textContent || "").replace(/\s+/g, " ").trim();
+      const closestText = (candidate.closest("[class*='reference-item']")?.textContent || "").replace(/\s+/g, " ").trim();
+      let score = 0;
+      if (isVisible(candidate)) score += 100;
+      if (textIncludes(ownText, label)) score += 400;
+      if (textIncludes(closestText, label)) score += 250;
+      if (textIncludes(parentText, label)) score += 120;
+      if (candidate.querySelector("input[type='file']")) score += 80;
+      if (oppositeLabel && textIncludes(ownText, oppositeLabel)) score -= 220;
+      if (oppositeLabel && textIncludes(closestText, oppositeLabel)) score -= 120;
+      score -= Math.min(ownText.length, 400) / 20;
+      return { candidate, index, score };
+    }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score || a.index - b.index);
+
+    if (scoredCandidates[0]) {
+      return scoredCandidates[0].candidate;
+    }
+
+    for (const el of document.querySelectorAll("*")) {
+      if (!isVisible(el)) continue;
+      const text = el.textContent || "";
+      if (!textIncludes(text, label)) continue;
+      if (el.querySelector("input[type='file']")) return el;
+      const parent = el.closest("[class*='reference-item'], [class*='reference-upload-'], [data-testid*='upload'], [class*='upload']");
+      if (parent) return parent;
+    }
+    return null;
+  };
+
+  const getUploadRelatedText = (el) => {
+    if (!el) return "";
+    return [
+      el.textContent || "",
+      el.parentElement?.textContent || "",
+      el.closest("[class*='reference-item'], [class*='reference-upload-'], [data-testid*='upload'], [class*='upload']")?.textContent || "",
+    ].join(" ").replace(/\s+/g, " ").trim();
+  };
+
+  const findFileInputNearZone = (zone, label = "") => {
+    if (!zone) return null;
+    const parent = zone.closest("[class*='reference-item'], [class*='reference-upload-'], [data-testid*='upload'], [class*='upload']");
+    const inputs = Array.from(document.querySelectorAll("input[type='file']"));
+    const scored = inputs.map((input, index) => {
+      const owner = input.closest("[class*='reference-item'], [class*='reference-upload-'], [data-testid*='upload'], [class*='upload']");
+      const relatedText = getUploadRelatedText(owner || input);
+      let score = 0;
+      if (zone.contains(input)) score += 1000;
+      if (owner && zone.contains(owner)) score += 900;
+      if (owner && parent && owner === parent) score += 800;
+      if (label && textIncludes(relatedText, label)) score += 500;
+      if (owner && label && textIncludes(getUploadRelatedText(owner.parentElement), label)) score += 200;
+      return { input, index, score };
+    }).sort((a, b) => b.score - a.score || a.index - b.index);
+    return scored[0]?.score > 0 ? scored[0].input : null;
+  };
+
+  const setElementText = (el, value) => {
+    const nextValue = value || "";
+    el.focus();
+    if ("value" in el) {
+      const proto = el.tagName === "TEXTAREA" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+      if (setter) setter.call(el, nextValue);
+      else el.value = nextValue;
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, data: nextValue }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
+    el.textContent = nextValue;
+    el.dispatchEvent(new InputEvent("input", { bubbles: true, data: nextValue }));
+  };
+
+  const waitForJimengVideoReady = async (options = {}) => waitFor(() => {
+    const signal = getVisibleTextareas()[0]
+      || findVideoFrameZone("首帧")
+      || getVisibleComboboxes()[0]
+      || Array.from(document.querySelectorAll("button")).find((btn) => {
+        if (!isVisible(btn)) return false;
+        const text = btn.textContent || "";
+        return textIncludes(text, "生成") || textIncludes(text, "Seedance") || /\d+:\d+/.test(text);
+      });
+    return signal || null;
+  }, {
+    timeoutMs: options.timeoutMs ?? 60000,
+    intervalMs: options.intervalMs ?? 250,
+    label: options.label || "jimeng_video_ready",
+  });
 
   const bridgeFetch = (request) => chrome.runtime.sendMessage({ type: "bridge:fetch", request })
     .then(r => { if (!r.ok) throw new Error(r.error); return r; });
@@ -83,7 +205,7 @@
     // If already on type=image, just wait for the combobox to confirm page is ready
     if (window.location.href.includes("type=image")) {
       try {
-        waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
+        await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
         return { ok: true, data: { status: "already_on_image_tab" }, error: null };
       } catch {
         return { ok: false, data: null, error: "type=image page loaded but combobox not found" };
@@ -101,7 +223,8 @@
     }
 
     if (!tab) {
-      const clicked = await document.evaluate(() => {
+      const clicked = clickElement(findVisibleTextTarget("图片生成"));
+      /*
         const els = document.querySelectorAll("*");
         for (const el of els) {
           if (el.childNodes.length === 1 && textLike(el.textContent, "图片生成")) {
@@ -109,12 +232,12 @@
           }
         }
         return false;
-      });
+      */
       if (!clicked) return { ok: false, data: null, error: "图片生成 tab not found" };
       await delay(1000);
       // Wait for page to transition
-      waitFor(() => window.location.href.includes("type=image"), { timeoutMs: 15000, label: "type=image URL" });
-      waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
+      await waitFor(() => window.location.href.includes("type=image"), { timeoutMs: 15000, label: "type=image URL" });
+      await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
       return { ok: true, data: { status: "clicked_via_evaluate" }, error: null };
     }
 
@@ -125,28 +248,28 @@
     if (!isMenuItem && textLike(tab.textContent, "图片生成")) {
       const parentVisible = parentClickable && isVisible(parentClickable);
       if (parentVisible) {
-        parentClickable.click();
+        clickElement(parentClickable);
         await delay(1000);
         const secondClick = Array.from(document.querySelectorAll("*")).find(el =>
           textLike(el.textContent, "图片生成") && isVisible(el) && el !== tab
         );
-        if (secondClick) { secondClick.click(); }
+        if (secondClick) { clickElement(secondClick); }
         // Wait for page transition
-        waitFor(() => window.location.href.includes("type=image"), { timeoutMs: 15000, label: "type=image URL" });
+        await waitFor(() => window.location.href.includes("type=image"), { timeoutMs: 15000, label: "type=image URL" });
         return { ok: true, data: { status: "parent_then_option", parentTag: parentClickable.tagName }, error: null };
       }
-      tab.click();
+      clickElement(tab);
       await delay(1000);
       const option = Array.from(document.querySelectorAll("*")).find(el =>
         textLike(el.textContent, "图片生成") && isVisible(el) && el !== tab
       );
-      if (option) { option.click(); }
-      waitFor(() => window.location.href.includes("type=image"), { timeoutMs: 15000, label: "type=image URL" });
+      if (option) { clickElement(option); }
+      await waitFor(() => window.location.href.includes("type=image"), { timeoutMs: 15000, label: "type=image URL" });
       return { ok: true, data: { status: "trigger_then_option" }, error: null };
     }
 
-    tab.click();
-    waitFor(() => window.location.href.includes("type=image"), { timeoutMs: 15000, label: "type=image URL" });
+    clickElement(tab);
+    await waitFor(() => window.location.href.includes("type=image"), { timeoutMs: 15000, label: "type=image URL" });
     return { ok: true, data: { status: "menu_item_clicked" }, error: null };
   }
 
@@ -159,7 +282,7 @@
 
     // Wait for combobox to appear (page may still be rendering)
     try {
-      waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 20000, label: "model_combobox" });
+      await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 20000, label: "model_combobox" });
     } catch {
       const comboboxes = allEls().filter(el => el.getAttribute("role") === "combobox");
       const comboboxTexts = comboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
@@ -499,12 +622,10 @@
     const delayMs = 200;
 
     // Wait for submit button to be enabled (becomes clickable after upload + prompt)
-    const enabledSubmit = waitFor(() => {
+    const targetBtn = await waitFor(() => {
       const btn = document.querySelector('button[class*="submit-button"]:not([disabled])');
       return btn || null;
     }, { timeoutMs: 300000, label: "enabled_submit_button" });
-
-    const targetBtn = await enabledSubmit;
 
     if (!targetBtn) {
       const allBtns = Array.from(document.querySelectorAll("button")).slice(0, 8).map(b =>
@@ -1164,6 +1285,858 @@
     }
 
     return { ok: false, data: null, error: `Timed out after ${job.timeoutSeconds || 600}s, no video found` };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hardened video step overrides
+  // ---------------------------------------------------------------------------
+
+  const DEFAULT_JIMENG_VIDEO_URL = "https://jimeng.jianying.com/ai-tool/home/?type=video&workspace=0";
+
+  const normalizeJimengVideoUrl = (targetUrl) => {
+    try {
+      const url = new URL(targetUrl || DEFAULT_JIMENG_VIDEO_URL);
+      url.searchParams.set("type", "video");
+      if (!url.searchParams.get("workspace") || url.searchParams.get("workspace") === "undefined") {
+        url.searchParams.set("workspace", "0");
+      }
+      return url.toString();
+    } catch (_error) {
+      return DEFAULT_JIMENG_VIDEO_URL;
+    }
+  };
+
+  const getVideoOptionText = (el) => {
+    const directText = (el.textContent || "").trim();
+    if (directText) return directText;
+    return (el.getAttribute("aria-label") || "").trim();
+  };
+
+  const assignFileToInput = (fileInput, file) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    fileInput.files = transfer.files;
+    fileInput.dispatchEvent(new Event("input", { bubbles: true }));
+    fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  async function stepVideoNav(targetUrl) {
+    const target = normalizeJimengVideoUrl(targetUrl);
+    const shouldNavigate = !window.location.href.includes("type=video")
+      || window.location.search.includes("workspace=undefined");
+
+    if (shouldNavigate) {
+      window.location.href = target;
+    }
+
+    await waitFor(() => window.location.href.includes("type=video"), {
+      timeoutMs: 60000,
+      label: "video_page_navigated",
+    });
+    await waitForJimengVideoReady({ timeoutMs: 60000, label: "video_page_ready" });
+    return { ok: true, data: { status: shouldNavigate ? "navigated" : "already_on_page", url: window.location.href }, error: null };
+  }
+
+  async function stepVideoTab() {
+    if (window.location.href.includes("type=video")) {
+      try {
+        await waitForJimengVideoReady({ timeoutMs: 20000, label: "video_tab_ready" });
+        return { ok: true, data: { status: "already_on_video_tab" }, error: null };
+      } catch {
+        return { ok: false, data: null, error: "type=video page loaded but page controls never became ready" };
+      }
+    }
+
+    const tab = findVisibleTextTarget("视频生成");
+    if (!tab) return { ok: false, data: null, error: "视频生成 tab not found" };
+
+    clickElement(tab.parentElement && isVisible(tab.parentElement) ? tab.parentElement : tab);
+    await delay(1000);
+
+    const option = findVisibleTextTarget("视频生成");
+    if (option && option !== tab) clickElement(option);
+
+    await waitFor(() => window.location.href.includes("type=video"), {
+      timeoutMs: 30000,
+      label: "type=video URL",
+    });
+    await waitForJimengVideoReady({ timeoutMs: 20000, label: "video_tab_ready_after_click" });
+    return { ok: true, data: { status: "clicked_video_tab" }, error: null };
+  }
+
+  async function stepVideoModel() {
+    await waitForJimengVideoReady({ timeoutMs: 30000, label: "video_model_ready" });
+
+    const comboboxes = getVisibleComboboxes();
+    const modelCombobox = comboboxes.find((el) => textIncludes(el.textContent || "", "Seedance"))
+      || comboboxes.find((el) => {
+        const text = el.textContent || "";
+        return !/\d+:\d+/.test(text) && !textIncludes(text, "秒");
+      })
+      || comboboxes[0];
+
+    if (!modelCombobox) {
+      throw new Error("Video model combobox not found");
+    }
+
+    clickElement(modelCombobox);
+    await delay(500);
+
+    const listbox = await waitFor(() => {
+      return Array.from(document.querySelectorAll('[role="listbox"]')).find(isVisible) || null;
+    }, { timeoutMs: 5000, label: "video_model_listbox" }).catch(() => null);
+
+    if (listbox) {
+      const options = Array.from(listbox.querySelectorAll('[role="option"], li, button, div')).filter((el) => {
+        const text = getVideoOptionText(el);
+        return !!text;
+      });
+
+      const targetOption = options.find((el) => {
+        const text = getVideoOptionText(el);
+        return textIncludes(text, "Seedance") && textIncludes(text, "首尾帧");
+      }) || options.find((el) => textIncludes(getVideoOptionText(el), "Seedance"))
+        || options.find((el) => textIncludes(getVideoOptionText(el), "首尾帧"));
+
+      if (targetOption) {
+        clickElement(targetOption);
+        await delay(500);
+      } else {
+        document.body.click();
+        await delay(200);
+      }
+    } else {
+      document.body.click();
+      await delay(200);
+    }
+
+    if (!findVideoFrameZone("尾帧")) {
+      const frameModeTarget = findVisibleTextTarget("首尾帧");
+      if (frameModeTarget) {
+        clickElement(frameModeTarget);
+        await delay(800);
+      }
+    }
+
+    await waitFor(() => findVideoFrameZone("首帧") || getVisibleTextareas()[0] || null, {
+      timeoutMs: 15000,
+      label: "video_mode_controls",
+    });
+
+    return {
+      ok: true,
+      data: {
+        modelText: (modelCombobox.textContent || "").trim(),
+        hasLastFrameZone: !!findVideoFrameZone("尾帧"),
+      },
+      error: null,
+    };
+  }
+
+  async function stepVideoRatio(job) {
+    const ratio = job.aspectRatio || "16:9";
+    if (ratio === "16:9") {
+      return { ok: true, data: { ratio: "16:9", status: "default_ratio" }, error: null };
+    }
+
+    const ratioBtn = Array.from(document.querySelectorAll("button")).filter(isVisible).find((el) => /\d+:\d+/.test(el.textContent || ""));
+    if (!ratioBtn) {
+      const allBtns = Array.from(document.querySelectorAll("button")).filter(isVisible).map((el) => (el.textContent || "").trim().slice(0, 40)).join(" | ");
+      throw new Error(`Ratio button not found (buttons: ${allBtns})`);
+    }
+
+    clickElement(ratioBtn);
+    await delay(400);
+
+    const ratioLabel = Array.from(document.querySelectorAll("label.lv-radio, [role='radio'], button, div")).find((el) => {
+      return isVisible(el) && textLike((el.textContent || "").trim(), ratio);
+    });
+    if (!ratioLabel) {
+      const allLabels = Array.from(document.querySelectorAll("label.lv-radio, [role='radio']")).map((el) => (el.textContent || "").trim()).join(" | ");
+      throw new Error(`Ratio ${ratio} not found in dropdown (found: ${allLabels})`);
+    }
+
+    clickElement(ratioLabel);
+    await delay(200);
+    document.body.click();
+    await delay(200);
+    return { ok: true, data: { ratio }, error: null };
+  }
+
+  async function stepVideoUploadFirstFrame(asset) {
+    if (!asset) return { ok: false, data: null, error: "first frame asset is required" };
+
+    const zone = findVideoFrameZone("首帧");
+    if (!zone) return { ok: false, data: null, error: "first frame upload zone not found" };
+
+    const fileInput = findFileInputNearZone(zone);
+    if (!fileInput) return { ok: false, data: null, error: "first frame file input not found" };
+
+    const response = await bridgeFetch({ url: asset.url, responseType: "blobBase64" });
+    const binary = atob(response.base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const mimeType = asset.mimeType || response.mimeType || "application/octet-stream";
+    const file = new File([bytes], asset.name, { type: mimeType });
+    assignFileToInput(fileInput, file);
+
+    await waitFor(() => {
+      const imgs = zone.querySelectorAll("img");
+      return Array.from(imgs).find((img) => {
+        try {
+          return img.getBoundingClientRect().width > 50
+            && !img.src.startsWith("data:")
+            && !img.src.startsWith("blob:");
+        } catch {
+          return false;
+        }
+      }) || null;
+    }, { timeoutMs: 20000, label: "first_frame_preview" });
+
+    return { ok: true, data: { status: "uploaded", name: asset.name }, error: null };
+  }
+
+  async function stepVideoUploadLastFrame(asset) {
+    if (!asset) return { ok: true, data: { status: "skipped", reason: "no_asset" }, error: null };
+
+    const zone = findVideoFrameZone("尾帧");
+    if (!zone) return { ok: false, data: null, error: "last frame upload zone not found" };
+
+    const fileInput = findFileInputNearZone(zone);
+    if (!fileInput) return { ok: false, data: null, error: "last frame file input not found" };
+
+    const response = await bridgeFetch({ url: asset.url, responseType: "blobBase64" });
+    const binary = atob(response.base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const mimeType = asset.mimeType || response.mimeType || "application/octet-stream";
+    const file = new File([bytes], asset.name, { type: mimeType });
+    assignFileToInput(fileInput, file);
+
+    await waitFor(() => {
+      const imgs = zone.querySelectorAll("img");
+      return Array.from(imgs).find((img) => {
+        try {
+          return img.getBoundingClientRect().width > 50
+            && !img.src.startsWith("data:")
+            && !img.src.startsWith("blob:");
+        } catch {
+          return false;
+        }
+      }) || null;
+    }, { timeoutMs: 20000, label: "last_frame_preview" });
+
+    return { ok: true, data: { status: "uploaded", name: asset.name }, error: null };
+  }
+
+  async function stepVideoPrompt(job) {
+    await waitForJimengVideoReady({ timeoutMs: 30000, label: "video_prompt_ready" });
+
+    const textareas = getVisibleTextareas();
+    if (textareas.length === 0) {
+      return { ok: false, data: null, error: "No textarea found for video prompt input" };
+    }
+
+    const movementText = job.movement || job.prompt || "";
+    const promptText = job.prompt || "";
+
+    const movementTextarea = textareas.find((el) => {
+      const placeholder = el.getAttribute("placeholder") || "";
+      return textIncludes(placeholder, "动作") || textIncludes(placeholder, "运动");
+    }) || textareas[0];
+
+    const promptTextarea = textareas.find((el) => {
+      if (el === movementTextarea) return false;
+      const placeholder = el.getAttribute("placeholder") || "";
+      return textIncludes(placeholder, "描述") || textIncludes(placeholder, "创意");
+    }) || textareas.find((el) => el !== movementTextarea) || movementTextarea;
+
+    setElementText(movementTextarea, movementText);
+    await delay(200);
+
+    if (promptTextarea && promptTextarea !== movementTextarea) {
+      setElementText(promptTextarea, promptText);
+      await delay(200);
+    } else if (promptText && promptTextarea === movementTextarea) {
+      setElementText(promptTextarea, `${movementText}\n${promptText}`.trim());
+      await delay(200);
+    }
+
+    return { ok: true, data: { promptLength: promptText.length, movementLength: movementText.length }, error: null };
+  }
+
+  async function stepVideoGenerate() {
+    const pickGenerateButton = () => {
+      const buttons = Array.from(document.querySelectorAll("button")).filter((btn) => isVisible(btn) && !btn.disabled);
+      const scored = buttons.map((btn) => {
+        const text = (btn.textContent || "").trim();
+        let score = 0;
+        if (textIncludes(text, "生成")) score += 5;
+        if ((btn.className || "").includes("primary")) score += 3;
+        if ((btn.className || "").includes("lv-btn-primary")) score += 2;
+        if (textIncludes(text, "查看") || textIncludes(text, "上传")) score -= 4;
+        return { btn, score };
+      }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score);
+      return scored[0]?.btn || null;
+    };
+
+    const targetBtn = await waitFor(() => pickGenerateButton(), {
+      timeoutMs: 300000,
+      label: "video_generate_button",
+    });
+
+    if (!targetBtn) {
+      const allBtns = Array.from(document.querySelectorAll("button")).slice(0, 8).map((b) =>
+        `dis:${b.disabled} cls:${String(b.className).slice(0, 35)} txt:${(b.textContent || "").trim().slice(0, 12)}`
+      ).join(" | ");
+      throw new Error(`Generate button never became enabled (all_btns: ${allBtns})`);
+    }
+
+    clickElement(targetBtn);
+    await delay(300);
+
+    const processing = await waitFor(() => {
+      if (window.location.href.includes("/generate")) return true;
+      if (targetBtn.disabled) return true;
+      return Array.from(document.querySelectorAll("button")).some((btn) => {
+        if (!isVisible(btn)) return false;
+        const text = btn.textContent || "";
+        return btn.disabled && textIncludes(text, "生成");
+      }) || null;
+    }, { timeoutMs: 15000, label: "video_generate_submission" }).catch(() => null);
+
+    return {
+      ok: true,
+      data: {
+        clicked: (targetBtn.textContent || "").trim().slice(0, 30),
+        processing: !!processing,
+      },
+      error: null,
+    };
+  }
+
+  async function stepVideoWait(job) {
+    const TIMEOUT_MS = (job.timeoutSeconds ? job.timeoutSeconds : 600) * 1000;
+    const deadline = Date.now() + TIMEOUT_MS;
+    const POLL_INTERVAL_MS = 3000;
+    const STABLE_THRESHOLD_MS = 8000;
+    let lastCandidateKey = "";
+    let stableSince = 0;
+    let lastViewClickAt = 0;
+
+    const collectVideoCandidates = () => {
+      const candidates = [];
+      const pushCandidate = (url, sourceType) => {
+        const value = String(url || "").trim();
+        if (!value || value.startsWith("data:") || value.startsWith("blob:")) return;
+        candidates.push({ videoUrl: value, sourceType });
+      };
+
+      for (const videoEl of document.querySelectorAll("video")) {
+        pushCandidate(videoEl.currentSrc || videoEl.src, "videoElement");
+      }
+      for (const sourceEl of document.querySelectorAll("video source[src]")) {
+        pushCandidate(sourceEl.src, "videoSource");
+      }
+      for (const linkEl of document.querySelectorAll("a[href]")) {
+        const href = linkEl.href || "";
+        if (/\.(mp4|webm)(\?|$)/i.test(href) || /video/i.test(href)) {
+          pushCandidate(href, "downloadLink");
+        }
+      }
+
+      const deduped = [];
+      const seen = new Set();
+      for (const candidate of candidates) {
+        const key = `${candidate.sourceType}:${candidate.videoUrl}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(candidate);
+      }
+      return deduped;
+    };
+
+    if (!window.location.href.includes("/generate")) {
+      console.log("[stepVideoWait] waiting for /generate navigation...");
+      const navDeadline = Date.now() + 60000;
+      while (Date.now() < navDeadline) {
+        if (window.location.href.includes("/generate")) {
+          console.log("[stepVideoWait] navigated to:", window.location.href);
+          break;
+        }
+        await delay(500);
+      }
+    }
+
+    while (Date.now() < deadline) {
+      const candidates = collectVideoCandidates();
+      const current = candidates[0];
+
+      if (current) {
+        const key = `${current.sourceType}:${current.videoUrl}`;
+        if (key !== lastCandidateKey) {
+          lastCandidateKey = key;
+          stableSince = Date.now();
+          console.log("[stepVideoWait] candidate changed:", current.sourceType, current.videoUrl.slice(0, 80));
+        } else if (Date.now() - stableSince >= STABLE_THRESHOLD_MS) {
+          return { ok: true, data: current, error: null };
+        }
+      }
+
+      const now = Date.now();
+      if (now - lastViewClickAt >= 10000) {
+        const viewBtn = Array.from(document.querySelectorAll("a, button")).find((el) => {
+          if (!isVisible(el)) return false;
+          const text = el.textContent || "";
+          return textIncludes(text, "去查看") || textIncludes(text, "查看结果");
+        });
+        if (viewBtn) {
+          clickElement(viewBtn);
+          lastViewClickAt = now;
+          await delay(1500);
+          continue;
+        }
+      }
+
+      await delay(POLL_INTERVAL_MS);
+    }
+
+    return { ok: false, data: null, error: `Timed out after ${job.timeoutSeconds || 600}s, no video found` };
+  }
+
+  async function stepVideoModel() {
+    await waitForJimengVideoReady({ timeoutMs: 30000, label: "video_model_ready" });
+
+    const getControlText = (el) => getVideoOptionText(el).replace(/\s+/g, " ").trim();
+    const isDurationText = (text) => /^\d+\s*s$/i.test(text) || textIncludes(text, "秒");
+    const isRatioText = (text) => /\d+:\d+/.test(text);
+    const isFrameModeText = (text) => textIncludes(text, "首尾帧") || textIncludes(text, "首帧") || textIncludes(text, "尾帧");
+    const isTabText = (text) => textIncludes(text, "视频生成") || textIncludes(text, "图片生成");
+    const looksLikeModelText = (text) => {
+      if (!text) return false;
+      if (textIncludes(text, "Seedance")) return true;
+      if (isRatioText(text) || isDurationText(text) || isFrameModeText(text) || isTabText(text)) return false;
+      return /\d+\.\d+/.test(text);
+    };
+
+    const comboboxes = getVisibleComboboxes();
+    const fallbackControls = Array.from(document.querySelectorAll(
+      '[role="combobox"], button, [role="button"], [aria-haspopup="listbox"], [aria-expanded]'
+    )).filter(isVisible);
+    const dedupedControls = Array.from(new Set([...comboboxes, ...fallbackControls]));
+    const visibleControlTexts = dedupedControls
+      .map((el) => getControlText(el))
+      .filter(Boolean)
+      .slice(0, 12)
+      .join(" | ");
+
+    const modelControl = dedupedControls.find((el) => textIncludes(getControlText(el), "Seedance"))
+      || dedupedControls.find((el) => looksLikeModelText(getControlText(el)));
+
+    if (!modelControl) {
+      const frameReady = findVideoFrameZone("首帧") || findVideoFrameZone("尾帧");
+      if (frameReady) {
+        return {
+          ok: true,
+          data: {
+            status: "model_control_missing_but_frame_controls_ready",
+            modelText: "",
+            hasLastFrameZone: !!findVideoFrameZone("尾帧"),
+          },
+          error: null,
+        };
+      }
+      throw new Error(`Video model control not found (visible controls: ${visibleControlTexts || "none"})`);
+    }
+
+    clickElement(modelControl);
+    await delay(500);
+
+    const listbox = await waitFor(() => {
+      return Array.from(document.querySelectorAll('[role="listbox"]')).find(isVisible) || null;
+    }, { timeoutMs: 5000, label: "video_model_listbox" }).catch(() => null);
+
+    if (listbox) {
+      const options = Array.from(listbox.querySelectorAll('[role="option"], li, button, div')).filter((el) => {
+        const text = getVideoOptionText(el);
+        return !!text;
+      });
+
+      const targetOption = options.find((el) => {
+        const text = getVideoOptionText(el);
+        return textIncludes(text, "Seedance") && textIncludes(text, "首尾帧");
+      }) || options.find((el) => textIncludes(getVideoOptionText(el), "Seedance"))
+        || options.find((el) => textIncludes(getVideoOptionText(el), "首尾帧"));
+
+      if (targetOption) {
+        clickElement(targetOption);
+        await delay(500);
+      } else {
+        document.body.click();
+        await delay(200);
+      }
+    } else {
+      document.body.click();
+      await delay(200);
+    }
+
+    if (!findVideoFrameZone("尾帧")) {
+      const frameModeTarget = findVisibleTextTarget("首尾帧");
+      if (frameModeTarget) {
+        clickElement(frameModeTarget);
+        await delay(800);
+      }
+    }
+
+    await waitFor(() => findVideoFrameZone("首帧") || getVisibleTextareas()[0] || null, {
+      timeoutMs: 15000,
+      label: "video_mode_controls",
+    });
+
+    return {
+      ok: true,
+      data: {
+        modelText: getControlText(modelControl),
+        hasLastFrameZone: !!findVideoFrameZone("尾帧"),
+      },
+      error: null,
+    };
+  }
+
+  const getFrameZoneState = (zone, fileInput) => {
+    const imgs = Array.from(zone.querySelectorAll("img")).filter((img) => {
+      try {
+        return img.getBoundingClientRect().width > 24 && img.getBoundingClientRect().height > 24;
+      } catch {
+        return false;
+      }
+    });
+    const canvases = Array.from(zone.querySelectorAll("canvas")).filter((canvas) => {
+      try {
+        return canvas.getBoundingClientRect().width > 24 && canvas.getBoundingClientRect().height > 24;
+      } catch {
+        return false;
+      }
+    });
+    const videos = Array.from(zone.querySelectorAll("video")).filter((video) => {
+      try {
+        return video.getBoundingClientRect().width > 24 && video.getBoundingClientRect().height > 24;
+      } catch {
+        return false;
+      }
+    });
+    const text = (zone.textContent || "").replace(/\s+/g, " ").trim();
+    const buttonTexts = Array.from(zone.querySelectorAll("button, [role='button']")).filter(isVisible).map((el) => {
+      return (el.textContent || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+    }).filter(Boolean);
+    const fileCount = fileInput?.files?.length || 0;
+    const fileNames = Array.from(fileInput?.files || []).map((file) => file.name);
+    const hasReadyText = ["重传", "重新上传", "替换", "删除", "移除", "自动匹配"].some((label) => textIncludes(text, label));
+    const hasReadyButton = ["自动匹配", "替换", "重传", "删除"].some((label) => buttonTexts.some((textValue) => textIncludes(textValue, label)));
+    const imgKinds = imgs.map((img) => {
+      const src = img.currentSrc || img.src || "";
+      if (src.startsWith("blob:")) return "blob";
+      if (src.startsWith("data:")) return "data";
+      if (src.startsWith("http")) return "http";
+      return src ? "other" : "empty";
+    });
+    return {
+      previewCount: imgs.length,
+      canvasCount: canvases.length,
+      videoCount: videos.length,
+      fileCount,
+      fileNames,
+      hasReadyText,
+      hasReadyButton,
+      buttonTexts: buttonTexts.slice(0, 6),
+      textSample: text.slice(0, 120),
+      imgKinds,
+    };
+  };
+
+  const getGlobalVideoUploadState = () => {
+    const actionTexts = Array.from(document.querySelectorAll("button, [role='button'], a")).filter(isVisible).map((el) => {
+      return (el.textContent || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+    }).filter(Boolean);
+    const matchedActionTexts = actionTexts.filter((text) => {
+      return ["自动匹配", "替换", "重传", "重新上传", "删除", "移除"].some((label) => textIncludes(text, label));
+    });
+    const fileNames = Array.from(document.querySelectorAll("input[type='file']")).flatMap((input) => {
+      return Array.from(input.files || []).map((file) => file.name);
+    });
+    return {
+      matchedActionTexts: matchedActionTexts.slice(0, 10),
+      fileNames: fileNames.slice(0, 10),
+      signature: `${matchedActionTexts.join("|")}::${fileNames.join("|")}`,
+    };
+  };
+
+  const getUploadStabilitySignature = (zone, fileInput) => {
+    const localState = getFrameZoneState(zone, fileInput);
+    const globalState = getGlobalVideoUploadState();
+    return JSON.stringify({
+      previewCount: localState.previewCount,
+      canvasCount: localState.canvasCount,
+      videoCount: localState.videoCount,
+      fileCount: localState.fileCount,
+      fileNames: localState.fileNames,
+      hasReadyText: localState.hasReadyText,
+      hasReadyButton: localState.hasReadyButton,
+      buttonTexts: localState.buttonTexts,
+      imgKinds: localState.imgKinds,
+      globalMatchedActionTexts: globalState.matchedActionTexts,
+      globalFileNames: globalState.fileNames,
+    });
+  };
+
+  async function stepVideoUploadFrame(asset, zoneLabel, waitLabel) {
+    if (!asset) {
+      return { ok: false, data: null, error: `${zoneLabel} asset is required` };
+    }
+
+    const locateUploadTarget = () => {
+      const currentZone = findVideoFrameZone(zoneLabel);
+      if (!currentZone) return null;
+      const currentInput = findFileInputNearZone(currentZone, zoneLabel);
+      if (!currentInput) return null;
+      return { zone: currentZone, fileInput: currentInput };
+    };
+
+    const evaluateUploadedState = (state, previousState) => {
+      const localButtonsChanged = state.buttonTexts.join("|") !== previousState.buttonTexts.join("|");
+      const localTextChanged = state.textSample !== previousState.textSample;
+      const visualReady = state.previewCount > previousState.previewCount
+        || state.canvasCount > previousState.canvasCount
+        || state.videoCount > previousState.videoCount
+        || state.hasReadyText
+        || state.hasReadyButton
+        || localButtonsChanged
+        || localTextChanged
+        || state.imgKinds.some((kind) => kind === "blob" || kind === "data" || kind === "http");
+      const fileReady = state.fileCount > 0 && state.fileNames.includes(asset.name);
+      return visualReady || fileReady;
+    };
+
+    const target = locateUploadTarget();
+    if (!target) {
+      return { ok: false, data: null, error: `${zoneLabel} upload zone not found` };
+    }
+    let { zone, fileInput } = target;
+    clickElement(zone);
+    await delay(200);
+
+    const beforeState = getFrameZoneState(zone, fileInput);
+    const beforeGlobalState = getGlobalVideoUploadState();
+    const response = await bridgeFetch({ url: asset.url, responseType: "blobBase64" });
+    const binary = atob(response.base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const mimeType = asset.mimeType || response.mimeType || "application/octet-stream";
+    const file = new File([bytes], asset.name, { type: mimeType });
+
+    const tryUpload = async (currentZone, currentInput, previousState, previousGlobalState, timeoutMs) => {
+      assignFileToInput(currentInput, file);
+      await delay(300);
+      clickElement(currentZone);
+      return waitFor(() => {
+        const refreshed = locateUploadTarget();
+        const liveZone = refreshed?.zone || currentZone;
+        const liveInput = refreshed?.fileInput || currentInput;
+        const state = getFrameZoneState(liveZone, liveInput);
+        const globalState = getGlobalVideoUploadState();
+        const globalChanged = globalState.signature !== previousGlobalState.signature;
+        const globalReady = globalState.fileNames.includes(asset.name)
+          || (globalChanged && globalState.matchedActionTexts.length > 0);
+        return (evaluateUploadedState(state, previousState) || globalReady)
+          ? { ...state, globalMatchedActionTexts: globalState.matchedActionTexts }
+          : null;
+      }, { timeoutMs, label: waitLabel }).catch(() => null);
+    };
+
+    let uploadedState = await tryUpload(zone, fileInput, beforeState, beforeGlobalState, 25000);
+
+    if (!uploadedState) {
+      await delay(1200);
+      const retryTarget = locateUploadTarget();
+      if (retryTarget) {
+        zone = retryTarget.zone;
+        fileInput = retryTarget.fileInput;
+        const retryBeforeState = getFrameZoneState(zone, fileInput);
+        const retryBeforeGlobalState = getGlobalVideoUploadState();
+        uploadedState = await tryUpload(zone, fileInput, retryBeforeState, retryBeforeGlobalState, 15000);
+      }
+    }
+
+    if (!uploadedState) {
+      const afterState = getFrameZoneState(zone, fileInput);
+      return {
+        ok: false,
+        data: { beforeState, afterState },
+        error: `${zoneLabel} upload did not produce a visible preview or retained file selection`,
+      };
+    }
+
+    const STABLE_UPLOAD_MS = 1800;
+    let stableSignature = "";
+    let stableSince = 0;
+    await waitFor(() => {
+      const refreshed = locateUploadTarget();
+      const liveZone = refreshed?.zone || zone;
+      const liveInput = refreshed?.fileInput || fileInput;
+      const signature = getUploadStabilitySignature(liveZone, liveInput);
+      if (signature !== stableSignature) {
+        stableSignature = signature;
+        stableSince = Date.now();
+        return null;
+      }
+      return Date.now() - stableSince >= STABLE_UPLOAD_MS ? true : null;
+    }, { timeoutMs: 5000, label: `${waitLabel}_stable` }).catch(() => null);
+
+    await delay(400);
+
+    return {
+      ok: true,
+      data: {
+        status: "uploaded",
+        name: asset.name,
+        previewCount: uploadedState.previewCount,
+        fileCount: uploadedState.fileCount,
+        imgKinds: uploadedState.imgKinds,
+        globalMatchedActionTexts: uploadedState.globalMatchedActionTexts || [],
+      },
+      error: null,
+    };
+  }
+
+  async function stepVideoUploadFirstFrame(asset) {
+    return stepVideoUploadFrame(asset, "首帧", "first_frame_preview");
+  }
+
+  async function stepVideoUploadLastFrame(asset) {
+    if (!asset) {
+      return { ok: true, data: { status: "skipped", reason: "no_asset" }, error: null };
+    }
+    return stepVideoUploadFrame(asset, "尾帧", "last_frame_preview");
+  }
+
+  async function stepVideoWait(job) {
+    const TIMEOUT_MS = (job.timeoutSeconds ? job.timeoutSeconds : 600) * 1000;
+    const deadline = Date.now() + TIMEOUT_MS;
+    const POLL_INTERVAL_MS = 3000;
+    const STABLE_THRESHOLD_MS = 8000;
+    let lastCandidateKey = "";
+    let stableSince = 0;
+    let lastViewClickAt = 0;
+    let enteredResult = false;
+
+    const getResultActionText = (el) => (el.textContent || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+    const findResultAction = () => {
+      const actions = Array.from(document.querySelectorAll("a, button, [role='button']")).filter(isVisible);
+      return actions.find((el) => {
+        const text = getResultActionText(el);
+        return textIncludes(text, "去查看") || textIncludes(text, "查看结果") || textIncludes(text, "立即查看");
+      }) || null;
+    };
+
+    const hasPendingGenerationText = () => {
+      const pendingTexts = ["生成中", "排队中", "处理中", "预计", "等待中"];
+      const candidates = Array.from(document.querySelectorAll("div, span, p, button")).filter(isVisible);
+      return candidates.some((el) => {
+        const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+        return pendingTexts.some((label) => textIncludes(text, label));
+      });
+    };
+
+    const collectVideoCandidates = () => {
+      const candidates = [];
+      const pushCandidate = (url, sourceType, el) => {
+        const value = String(url || "").trim();
+        if (!value || value.startsWith("data:") || value.startsWith("blob:")) return;
+        if (el && !isVisible(el)) return;
+        candidates.push({ videoUrl: value, sourceType });
+      };
+
+      for (const videoEl of document.querySelectorAll("video")) {
+        pushCandidate(videoEl.currentSrc || videoEl.src, "videoElement", videoEl);
+      }
+      for (const sourceEl of document.querySelectorAll("video source[src]")) {
+        pushCandidate(sourceEl.src, "videoSource", sourceEl.closest("video"));
+      }
+      for (const linkEl of document.querySelectorAll("a[href]")) {
+        const href = linkEl.href || "";
+        if (/\.(mp4|webm)(\?|$)/i.test(href) || /video/i.test(href)) {
+          pushCandidate(href, "downloadLink", linkEl);
+        }
+      }
+
+      const deduped = [];
+      const seen = new Set();
+      for (const candidate of candidates) {
+        const key = `${candidate.sourceType}:${candidate.videoUrl}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(candidate);
+      }
+      return deduped;
+    };
+
+    if (!window.location.href.includes("/generate")) {
+      console.log("[stepVideoWait] waiting for /generate navigation...");
+      const navDeadline = Date.now() + 60000;
+      while (Date.now() < navDeadline) {
+        if (window.location.href.includes("/generate")) {
+          console.log("[stepVideoWait] navigated to:", window.location.href);
+          break;
+        }
+        await delay(500);
+      }
+    }
+
+    while (Date.now() < deadline) {
+      const now = Date.now();
+      const resultAction = findResultAction();
+
+      if (!enteredResult && resultAction && now - lastViewClickAt >= 5000) {
+        clickElement(resultAction);
+        enteredResult = true;
+        lastViewClickAt = now;
+        lastCandidateKey = "";
+        stableSince = 0;
+        console.log("[stepVideoWait] clicked result action:", getResultActionText(resultAction));
+        await delay(2000);
+        continue;
+      }
+
+      if (!enteredResult) {
+        await delay(POLL_INTERVAL_MS);
+        continue;
+      }
+
+      const candidates = collectVideoCandidates();
+      const current = candidates[0];
+
+      if (current) {
+        const key = `${current.sourceType}:${current.videoUrl}`;
+        if (key !== lastCandidateKey) {
+          lastCandidateKey = key;
+          stableSince = Date.now();
+          console.log("[stepVideoWait] candidate changed:", current.sourceType, current.videoUrl.slice(0, 80));
+        } else if (Date.now() - stableSince >= STABLE_THRESHOLD_MS && !hasPendingGenerationText()) {
+          return { ok: true, data: current, error: null };
+        }
+      }
+
+      if (resultAction && now - lastViewClickAt >= 15000) {
+        clickElement(resultAction);
+        lastViewClickAt = now;
+        await delay(1500);
+        continue;
+      }
+
+      await delay(POLL_INTERVAL_MS);
+    }
+
+    return { ok: false, data: null, error: `Timed out after ${job.timeoutSeconds || 600}s, no real video found` };
   }
 
   // ---------------------------------------------------------------------------

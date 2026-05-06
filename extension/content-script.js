@@ -234,6 +234,49 @@ async function runJimengImageJobHandler(job, serverUrl) {
   }
 }
 
+const USER_ABORTED_VIDEO_GENERATE_CONFIRMATION = "USER_ABORTED_VIDEO_GENERATE_CONFIRMATION";
+
+function truncateForConfirm(value, maxLength = 140) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "-";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
+}
+
+function buildJimengVideoConfirmMessage(job, details = {}) {
+  const firstFrameAsset = details.firstFrameAsset;
+  const lastFrameAsset = details.lastFrameAsset;
+  const lines = [
+    "即梦视频提交前确认",
+    "",
+    `Job: ${job.id || "-"}`,
+    `Model: ${details.modelText || "-"}`,
+    `Ratio: ${details.ratio || job.aspectRatio || "16:9"}`,
+    `First frame: ${firstFrameAsset?.name || "-"}`,
+    `Last frame: ${lastFrameAsset?.name || "None"}`,
+    `Movement: ${truncateForConfirm(job.movement, 120)}`,
+    `Prompt: ${truncateForConfirm(job.prompt, 180)}`,
+    "",
+    "确认以上参数无误后，点击“确定”才会真正提交到即梦。",
+  ];
+  return lines.join("\n");
+}
+
+async function confirmJimengVideoSubmission(job, details, record) {
+  const message = buildJimengVideoConfirmMessage(job, details);
+  await record("S8V: Awaiting user confirmation before paid submission", {
+    modelText: details.modelText || "",
+    ratio: details.ratio || job.aspectRatio || "16:9",
+    firstFrame: details.firstFrameAsset?.name || "",
+    lastFrame: details.lastFrameAsset?.name || "",
+  });
+  const confirmed = window.confirm(message);
+  if (!confirmed) {
+    await record("S8V: User canceled video submission");
+    throw new Error(`${USER_ABORTED_VIDEO_GENERATE_CONFIRMATION}: User canceled before clicking generate`);
+  }
+  await record("S8V: User confirmed video submission");
+}
+
 // Jimeng video handler (uses step functions S1V-S9V)
 async function runJimengVideoJobHandler(job, serverUrl) {
   const logs = [];
@@ -257,9 +300,18 @@ async function runJimengVideoJobHandler(job, serverUrl) {
 
   const firstFrameAsset = job.assets?.find(a => a.label === "firstFrame") || job.assets?.[0];
   const lastFrameAsset = job.assets?.find(a => a.label === "lastFrame");
+  let modelResult = null;
+  let ratioResult = null;
+  let firstFrameResult = null;
+  let lastFrameResult = null;
+  let promptResult = null;
 
   try {
     await record(`Preparing ${job.id}`);
+
+    if (!firstFrameAsset) {
+      throw new Error("No first frame asset found in job.assets");
+    }
 
     await record("S1V: Navigating to video page");
     {
@@ -277,30 +329,47 @@ async function runJimengVideoJobHandler(job, serverUrl) {
     {
       const r = await window.stepVideoModel();
       if (!r.ok) throw new Error(`[S3V] ${r.error} | DOM: ${snapshotDOM()}`);
+      modelResult = r.data || null;
     }
 
     await record("S4V: Selecting aspect ratio");
     {
       const r = await window.stepVideoRatio(job);
       if (!r.ok) throw new Error(`[S4V] ${r.error} | DOM: ${snapshotDOM()}`);
+      ratioResult = r.data || null;
     }
 
     await record("S5V: Uploading first frame");
-    if (firstFrameAsset) {
+    {
       const r = await window.stepVideoUploadFirstFrame(firstFrameAsset);
       if (!r.ok) throw new Error(`[S5V] ${r.error} | DOM: ${snapshotDOM()}`);
+      firstFrameResult = r.data || null;
     }
 
     await record("S6V: Uploading last frame (optional)");
     if (lastFrameAsset) {
       const r = await window.stepVideoUploadLastFrame(lastFrameAsset);
       if (!r.ok) throw new Error(`[S6V] ${r.error} | DOM: ${snapshotDOM()}`);
+      lastFrameResult = r.data || null;
     }
 
     await record("S7V: Filling prompt and movement description");
     {
       const r = await window.stepVideoPrompt(job);
       if (!r.ok) throw new Error(`[S7V] ${r.error} | DOM: ${snapshotDOM()}`);
+      promptResult = r.data || null;
+    }
+
+    if (job.confirmBeforeVideoGenerate) {
+      await confirmJimengVideoSubmission(job, {
+        modelText: modelResult?.modelText || "",
+        ratio: ratioResult?.ratio || job.aspectRatio || "16:9",
+        firstFrameAsset,
+        lastFrameAsset,
+        firstFrameResult,
+        lastFrameResult,
+        promptResult,
+      }, record);
     }
 
     await record("S8V: Clicking generate button");
