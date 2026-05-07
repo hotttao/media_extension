@@ -22,10 +22,20 @@ class JobStore:
             self.jobs.extend(new_jobs)
             return new_jobs
 
-    def claim_next_job(self, worker_id: str | None) -> Job | None:
+    @staticmethod
+    def classify_platform(job: Job) -> str:
+        if job.platform == "jimeng":
+            if job.target_url and "type=video" in job.target_url:
+                return "jimeng-video"
+            return "jimeng-image"
+        return "gpt-image"
+
+    def claim_next_job(self, worker_id: str | None, platform_id: str | None = None) -> Job | None:
         with self.lock:
             for job in self.jobs:
                 if job.status != "pending":
+                    continue
+                if platform_id and self.classify_platform(job) != platform_id:
                     continue
                 job.status = "running"
                 job.claimed_at = utc_now_iso()
@@ -79,10 +89,12 @@ class JobStore:
             job.failure_reason = "canceled"
             return job
 
-    def cancel_all(self) -> list[Job]:
+    def cancel_all(self, platform_id: str | None = None) -> list[Job]:
         with self.lock:
             canceled = []
             for job in self.jobs:
+                if platform_id and self.classify_platform(job) != platform_id:
+                    continue
                 if job.status == "pending":
                     job.status = "canceled"
                     job.finished_at = utc_now_iso()
@@ -120,6 +132,9 @@ class JobStore:
                         "id": job.id,
                         "caseFile": str(job.case_file),
                         "status": job.status,
+                        "platform": job.platform,
+                        "platformId": self.classify_platform(job),
+                        "targetUrl": job.target_url,
                         "createdAt": job.created_at,
                         "claimedAt": job.claimed_at,
                         "finishedAt": job.finished_at,

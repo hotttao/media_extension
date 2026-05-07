@@ -19,7 +19,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -234,10 +234,20 @@ class JobStore:
             self.jobs.extend(jobs)
             return jobs
 
-    def claim_next_job(self, worker_id: str | None) -> Job | None:
+    @staticmethod
+    def classify_platform(job: Job) -> str:
+        if job.platform == "jimeng":
+            if job.target_url and "type=video" in job.target_url:
+                return "jimeng-video"
+            return "jimeng-image"
+        return "gpt-image"
+
+    def claim_next_job(self, worker_id: str | None, platform_id: str | None = None) -> Job | None:
         with self.lock:
             for job in self.jobs:
                 if job.status != "pending":
+                    continue
+                if platform_id and self.classify_platform(job) != platform_id:
                     continue
                 job.status = "running"
                 job.claimed_at = utc_now_iso()
@@ -291,10 +301,12 @@ class JobStore:
             job.failure_reason = "canceled"
             return job
 
-    def cancel_all(self) -> list[Job]:
+    def cancel_all(self, platform_id: str | None = None) -> list[Job]:
         with self.lock:
             canceled = []
             for job in self.jobs:
+                if platform_id and self.classify_platform(job) != platform_id:
+                    continue
                 if job.status == "pending":
                     job.status = "canceled"
                     job.finished_at = utc_now_iso()
@@ -337,6 +349,9 @@ class JobStore:
                         "id": job.id,
                         "caseFile": str(job.case_file),
                         "status": job.status,
+                        "platform": job.platform,
+                        "platformId": self.classify_platform(job),
+                        "targetUrl": job.target_url,
                         "createdAt": job.created_at,
                         "claimedAt": job.claimed_at,
                         "finishedAt": job.finished_at,
@@ -472,7 +487,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             worker_id = self.headers.get("X-Worker-Id")
             host = self.headers.get("Host", "127.0.0.1:8765")
             base_url = f"http://{host}"
-            job = self.server.store.claim_next_job(worker_id)
+            platform_id = parse_qs(parsed.query).get("platform", [None])[0]
+            job = self.server.store.claim_next_job(worker_id, platform_id=platform_id)
             if job:
                 log_info("job claimed job_id=%s worker_id=%s", job.id, worker_id or "unknown")
             send_json(self, HTTPStatus.OK, {"job": job.to_public_dict(base_url) if job else None})
@@ -762,7 +778,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/v1/jobs/cancel":
-            canceled = self.server.store.cancel_all()
+            platform_id = parse_qs(parsed.query).get("platform", [None])[0]
+            canceled = self.server.store.cancel_all(platform_id=platform_id)
             log_info("canceled %d job(s)", len(canceled))
             send_json(
                 self,

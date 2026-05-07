@@ -50,6 +50,9 @@ class JobStatusResponse(BaseModel):
     id: str
     caseFile: str
     status: str
+    platform: str | None = None
+    platformId: str | None = None
+    targetUrl: str | None = None
     createdAt: str | None = None
     claimedAt: str | None = None
     finishedAt: str | None = None
