@@ -2170,6 +2170,43 @@
     return { ok: false, data: null, error: `Timed out after ${job.timeoutSeconds || 600}s, no real video found` };
   }
 
+  async function stepVideoCheckFirstFrameUploaded(asset) {
+    const zone = findVideoFrameZone("棣栧抚");
+    if (!zone) {
+      return { ok: false, data: null, error: "first frame upload zone not found" };
+    }
+
+    const fileInput = findFileInputNearZone(zone, "棣栧抚");
+    if (!fileInput) {
+      return { ok: false, data: null, error: "first frame file input not found" };
+    }
+
+    const state = getFrameZoneState(zone, fileInput);
+    const globalState = getGlobalVideoUploadState();
+    const expectedFileName = asset?.name || "";
+    const uploaded = state.previewCount > 0
+      || state.canvasCount > 0
+      || state.videoCount > 0
+      || state.hasReadyText
+      || state.hasReadyButton
+      || state.imgKinds.some((kind) => kind === "blob" || kind === "data" || kind === "http")
+      || (expectedFileName && state.fileNames.includes(expectedFileName))
+      || (expectedFileName && globalState.fileNames.includes(expectedFileName))
+      || globalState.matchedActionTexts.length > 0;
+
+    return {
+      ok: uploaded,
+      data: {
+        previewCount: state.previewCount,
+        fileCount: state.fileCount,
+        fileNames: state.fileNames,
+        imgKinds: state.imgKinds,
+        globalMatchedActionTexts: globalState.matchedActionTexts,
+      },
+      error: uploaded ? null : "first frame upload not verified",
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Export to window (shared across all content scripts)
   // ---------------------------------------------------------------------------
@@ -2187,6 +2224,7 @@
   window.stepVideoRatio = stepVideoRatio;
   window.stepVideoUploadFirstFrame = stepVideoUploadFirstFrame;
   window.stepVideoUploadLastFrame = stepVideoUploadLastFrame;
+  window.stepVideoCheckFirstFrameUploaded = stepVideoCheckFirstFrameUploaded;
   window.stepVideoPrompt = stepVideoPrompt;
   window.stepVideoGenerate = stepVideoGenerate;
   window.stepVideoWait = stepVideoWait;

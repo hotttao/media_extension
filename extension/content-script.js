@@ -341,9 +341,31 @@ async function runJimengVideoJobHandler(job, serverUrl) {
 
     await record("S5V: Uploading first frame");
     {
-      const r = await window.stepVideoUploadFirstFrame(firstFrameAsset);
-      if (!r.ok) throw new Error(`[S5V] ${r.error} | DOM: ${snapshotDOM()}`);
-      firstFrameResult = r.data || null;
+      let lastError = "first frame upload failed";
+      let verified = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const uploadResult = await window.stepVideoUploadFirstFrame(firstFrameAsset);
+        if (!uploadResult.ok) {
+          lastError = uploadResult.error || lastError;
+          continue;
+        }
+
+        const checkResult = await window.stepVideoCheckFirstFrameUploaded(firstFrameAsset);
+        if (checkResult.ok) {
+          verified = {
+            ...uploadResult.data,
+            verification: checkResult.data,
+            attempt,
+          };
+          break;
+        }
+
+        lastError = checkResult.error || "first frame upload not verified";
+        await record(`S5V: First frame upload verification failed, retrying (${attempt}/3)`, checkResult.data || null);
+      }
+
+      if (!verified) throw new Error(`[S5V] ${lastError} | DOM: ${snapshotDOM()}`);
+      firstFrameResult = verified;
     }
 
     await record("S6V: Uploading last frame (optional)");
