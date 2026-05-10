@@ -527,10 +527,10 @@ class MediaAIClient:
         )
         return payload if isinstance(payload, list) else []
 
-    def existing_style_images(self, model_image_id: str, pose_id: str) -> list[dict]:
-        query = urlencode({"modelImageId": model_image_id})
+    def existing_style_images(self, model_image_id: str, ip_id: str, pose_id: str) -> list[dict]:
+        query = urlencode({"modelImageId": model_image_id, "ipId": ip_id})
         payload = self.request_json(
-            "GET", f"/api/model-images/{model_image_id}/style-images?{query}"
+            "GET", f"/api/style-images?{query}"
         )
         items: list[dict] = []
         if isinstance(payload, list):
@@ -687,7 +687,7 @@ class MediaAIClient:
             raise RuntimeError(f"[style-image] missing fields: model_id={model_image_id_str!r} product_id={product_id!r} pose_id={pose_id_str!r} model_url={model_url!r} pose_url={pose_url!r}")
 
         if not force:
-            existing = self.existing_style_images(model_image_id_str, pose_id_str)
+            existing = self.existing_style_images(model_image_id_str, ip_id, pose_id_str)
             if existing:
                 return (None, "exists")
 

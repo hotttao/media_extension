@@ -55,7 +55,6 @@ def create_style_image(body: StyleImageCreateRequest, request: Request):
             model_image_id=model_image_id_str,
             pose_id=pose_id_str,
             output_root=output_root,
-            job_id=job_id,
             prompt=prompt,
             force=force,
         )

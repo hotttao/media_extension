@@ -57,12 +57,12 @@ def create_model_image(body: ModelImageCreateRequest, request: Request):
     store = request.app.state.store
     output_root = store.output_root / job_id
 
+    force = body.force
     try:
         case_path, status = client.build_model_image_task(
             product_id=resolved_product_id,
             ip_id=resolved_ip_id,
             output_root=output_root,
-            job_id=job_id,
             prompt=prompt,
             force=force,
         )
