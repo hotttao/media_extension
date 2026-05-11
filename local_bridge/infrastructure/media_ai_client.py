@@ -516,6 +516,15 @@ class MediaAIClient:
 
         return None
 
+    def fetch_scene(self, scene_id: str) -> dict | None:
+        """Fetch a scene by ID via /api/materials/{id}."""
+        try:
+            return self.request_json("GET", f"/api/materials/{scene_id}")
+        except HTTPError as error:
+            if error.code == 404:
+                return None
+            raise
+
     # -------------------------------------------------------------------------
     # Existence Checks
     # -------------------------------------------------------------------------

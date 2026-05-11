@@ -216,11 +216,14 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
         model_image_id = ensure_text(job.media_ai.get("modelImageId") or "")
         if not model_image_id:
             raise RuntimeError("style-image sidecar requires modelImageId.")
+        pose_id = ensure_text(job.media_ai.get("poseId")) or None
+        makeup_id = ensure_text(job.media_ai.get("makeupId")) or None
+        accessory_id = ensure_text(job.media_ai.get("accessoryId")) or None
         save_body = {
             "modelImageId": model_image_id,
-            "poseId": job.media_ai.get("poseId"),
-            "makeupId": job.media_ai.get("makeupId"),
-            "accessoryId": job.media_ai.get("accessoryId"),
+            "poseId": pose_id,
+            "makeupId": makeup_id,
+            "accessoryId": accessory_id,
             "imageUrl": image_url,
         }
         save_url = f"{base_url}/api/products/{product_id}/style-image/save"

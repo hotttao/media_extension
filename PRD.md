@@ -167,3 +167,8 @@ http://192.168.2.38/uploads/teams/18982144-3d42-4a51-98d8-4d6959332d66/first-fra
   "cookie": "next-auth.csrf-token=64f1479e1ac7911fe7d61cdc57c3f6c969feb157b964d57dae11fd719a4c85fd%7C3a799734f9fb028872f1ff83c5098feb96390604eefb76666245f54221d2d33d; next-auth.callback-url=http%3A%2F%2Flocalhost%3A3000; next-auth.session-token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..7MuWW6OjXhmNJ1zg.zBR0Fm82J5Ui9USgIjPGM9gkUVoyu6JSJlF0H-p1bbk8NBapD0u1YJ2tcRfJtRRNV756KJVVyu6Ih-3dr834xbZqaK8tn1PrquxNZZsgKuj2uO44IGoukzZc-xaG3vrlzf4h28yD41lYFI86tqQvW7T8K6aK8uZFlHJd5bzgOfBibFhRwHP6x_x5gToxNFOR2wn5jVNu87nOeUvqHsu_U83C70IPQCts0DFL4v-AliFCursSBaHghfVGup5bcoP1HeOQ1v2sVomfVnzxzONIdxd7Gt2TadJp6wCxg17fdh-77C1YiVOveJns9jbjwPuQ7keahiyVbog9tXI6Q1Cj_xTaHUfg0qFHU01QunaxvLEz7GbNqk5WDyfyaQ.os9K2wok94vfuktV7LsExw"
 }
 ```
+
+
+## 优化
+1. GPT 生图如果等待超过 10 分钟还没有生成，刷新页面后再判断，刷新后如果等待超过 5 分钟，没有直接判定失败。
+2. save image 如果报错，可以在界面上点击重试

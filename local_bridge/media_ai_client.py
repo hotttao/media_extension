@@ -509,6 +509,15 @@ class MediaAIClient:
 
         return None
 
+    def fetch_scene(self, scene_id: str) -> dict | None:
+        """Fetch a scene by ID via /api/materials/{id}."""
+        try:
+            return self.request_json("GET", f"/api/materials/{scene_id}")
+        except HTTPError as error:
+            if error.code == 404:
+                return None
+            raise
+
     # -------------------------------------------------------------------------
     # Existence Checks
     # -------------------------------------------------------------------------
@@ -520,10 +529,10 @@ class MediaAIClient:
         )
         return payload if isinstance(payload, list) else []
 
-    def existing_style_images(self, model_image_id: str, pose_id: str) -> list[dict]:
-        query = urlencode({"modelImageId": model_image_id})
+    def existing_style_images(self, model_image_id: str, pose_id: str, ip_id: str) -> list[dict]:
+        query = urlencode({"modelImageId": model_image_id, "ipId": ip_id})
         payload = self.request_json(
-            "GET", f"/api/model-images/{model_image_id}/style-images?{query}"
+            "GET", f"/api/style-images?{query}"
         )
         items: list[dict] = []
         if isinstance(payload, list):
@@ -689,7 +698,7 @@ class MediaAIClient:
             return (None, "error")
 
         if not force:
-            existing = self.existing_style_images(model_image_id_str, pose_id_str)
+            existing = self.existing_style_images(model_image_id_str, pose_id_str, ip_id)
             if existing:
                 return (None, "exists")
 
