@@ -1098,97 +1098,6 @@
     return { ok: true, data: { status: "uploaded", name: asset.name }, error: null };
   }
 
-  // S7V: Fill prompt and movement textareas
-  async function stepVideoPrompt(job) {
-    const delayMs = 300;
-
-    const promptEls = () => {
-      const results = [];
-      for (const el of document.querySelectorAll("textarea")) {
-        if (isVisible(el)) results.push(el);
-      }
-      return results;
-    };
-
-    // Find textarea with placeholder containing "运动方式"
-    const movementTextarea = promptEls().find(el =>
-      textIncludes(el.getAttribute("placeholder") || "", "运动方式")
-    );
-    const promptTextarea = promptEls().find(el =>
-      el !== movementTextarea && textIncludes(el.getAttribute("placeholder") || "", "描述")
-    );
-
-    if (movementTextarea) {
-      movementTextarea.focus();
-      movementTextarea.value = "";
-      movementTextarea.value = job.movement || job.prompt || "";
-      movementTextarea.dispatchEvent(new InputEvent("input", { bubbles: true, data: job.movement || job.prompt }));
-      movementTextarea.dispatchEvent(new Event("change", { bubbles: true }));
-      await delay(delayMs);
-    }
-
-    if (promptTextarea) {
-      promptTextarea.focus();
-      promptTextarea.value = "";
-      promptTextarea.value = job.prompt || "";
-      promptTextarea.dispatchEvent(new InputEvent("input", { bubbles: true, data: job.prompt }));
-      promptTextarea.dispatchEvent(new Event("change", { bubbles: true }));
-      await delay(delayMs);
-    } else if (promptEls().length >= 2) {
-      // Fallback: fill first visible textarea with movement/prompt, second with prompt
-      const all = promptEls();
-      all[0].focus();
-      all[0].value = "";
-      all[0].value = job.movement || job.prompt || "";
-      all[0].dispatchEvent(new InputEvent("input", { bubbles: true }));
-      all[0].dispatchEvent(new Event("change", { bubbles: true }));
-      await delay(delayMs);
-      all[1].focus();
-      all[1].value = "";
-      all[1].value = job.prompt || "";
-      all[1].dispatchEvent(new InputEvent("input", { bubbles: true }));
-      all[1].dispatchEvent(new Event("change", { bubbles: true }));
-      await delay(delayMs);
-    } else if (promptEls().length === 1) {
-      // Only one textarea found, fill it with prompt
-      const el = promptEls()[0];
-      el.focus();
-      el.value = "";
-      el.value = job.prompt || "";
-      el.dispatchEvent(new InputEvent("input", { bubbles: true, data: job.prompt }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-      await delay(delayMs);
-    }
-
-    return { ok: true, data: { promptLength: (job.prompt || "").length, movementLength: (job.movement || "").length }, error: null };
-  }
-
-  // S8V: Click generate button
-  async function stepVideoGenerate() {
-    const delayMs = 200;
-
-    const enabledBtn = await waitFor(() => {
-      const btn = document.querySelector("button.lv-btn-primary:not([disabled])");
-      return btn || null;
-    }, { timeoutMs: 300000, label: "lv-btn-primary_enabled" });
-
-    const targetBtn = await enabledBtn;
-    if (!targetBtn) {
-      const allBtns = Array.from(document.querySelectorAll("button")).slice(0, 8).map(b =>
-        `dis:${b.disabled} cls:${b.className.replace(/\S+/g, m => m).slice(0, 35)}`
-      ).join(" | ");
-      throw new Error(`Generate button never became enabled (all_btns: ${allBtns})`);
-    }
-
-    console.log("[stepVideoGenerate] clicking:", targetBtn.className.slice(0, 40));
-    targetBtn.click();
-    await delay(delayMs);
-
-    const isProcessing = document.querySelector("button.lv-btn-primary:disabled") !== null;
-    console.log("[stepVideoGenerate] clicked, processing:", isProcessing);
-    return { ok: true, data: { clicked: targetBtn.className.slice(0, 30), processing: isProcessing }, error: null };
-  }
-
   // S9V: Wait for generated video
   async function stepVideoWait(job) {
     const TIMEOUT_MS = (job.timeoutSeconds ? job.timeoutSeconds : 600) * 1000;
@@ -1565,54 +1474,64 @@
     return { ok: true, data: { promptLength: promptText.length, movementLength: movementText.length }, error: null };
   }
 
+  let _videoGenerateClicked = false;
+
   async function stepVideoGenerate() {
-    const pickGenerateButton = () => {
-      const buttons = Array.from(document.querySelectorAll("button")).filter((btn) => isVisible(btn) && !btn.disabled);
-      const scored = buttons.map((btn) => {
-        const text = (btn.textContent || "").trim();
-        let score = 0;
-        if (textIncludes(text, "生成")) score += 5;
-        if ((btn.className || "").includes("primary")) score += 3;
-        if ((btn.className || "").includes("lv-btn-primary")) score += 2;
-        if (textIncludes(text, "查看") || textIncludes(text, "上传")) score -= 4;
-        return { btn, score };
-      }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score);
-      return scored[0]?.btn || null;
-    };
-
-    const targetBtn = await waitFor(() => pickGenerateButton(), {
-      timeoutMs: 300000,
-      label: "video_generate_button",
-    });
-
-    if (!targetBtn) {
-      const allBtns = Array.from(document.querySelectorAll("button")).slice(0, 8).map((b) =>
-        `dis:${b.disabled} cls:${String(b.className).slice(0, 35)} txt:${(b.textContent || "").trim().slice(0, 12)}`
-      ).join(" | ");
-      throw new Error(`Generate button never became enabled (all_btns: ${allBtns})`);
+    if (_videoGenerateClicked) {
+      return { ok: true, data: { skipped: true }, error: null };
     }
+    _videoGenerateClicked = true;
+    try {
+      const pickGenerateButton = () => {
+        const buttons = Array.from(document.querySelectorAll("button")).filter((btn) => isVisible(btn) && !btn.disabled);
+        const scored = buttons.map((btn) => {
+          const text = (btn.textContent || "").trim();
+          let score = 0;
+          if (textIncludes(text, "生成")) score += 5;
+          if ((btn.className || "").includes("primary")) score += 3;
+          if ((btn.className || "").includes("lv-btn-primary")) score += 2;
+          if (textIncludes(text, "查看") || textIncludes(text, "上传")) score -= 4;
+          return { btn, score };
+        }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score);
+        return scored[0]?.btn || null;
+      };
 
-    clickElement(targetBtn);
-    await delay(300);
+      const targetBtn = await waitFor(() => pickGenerateButton(), {
+        timeoutMs: 300000,
+        label: "video_generate_button",
+      });
 
-    const processing = await waitFor(() => {
-      if (window.location.href.includes("/generate")) return true;
-      if (targetBtn.disabled) return true;
-      return Array.from(document.querySelectorAll("button")).some((btn) => {
-        if (!isVisible(btn)) return false;
-        const text = btn.textContent || "";
-        return btn.disabled && textIncludes(text, "生成");
-      }) || null;
-    }, { timeoutMs: 15000, label: "video_generate_submission" }).catch(() => null);
+      if (!targetBtn) {
+        const allBtns = Array.from(document.querySelectorAll("button")).slice(0, 8).map((b) =>
+          `dis:${b.disabled} cls:${String(b.className).slice(0, 35)} txt:${(b.textContent || "").trim().slice(0, 12)}`
+        ).join(" | ");
+        throw new Error(`Generate button never became enabled (all_btns: ${allBtns})`);
+      }
 
-    return {
-      ok: true,
-      data: {
-        clicked: (targetBtn.textContent || "").trim().slice(0, 30),
-        processing: !!processing,
-      },
-      error: null,
-    };
+      clickElement(targetBtn);
+      await delay(300);
+
+      const processing = await waitFor(() => {
+        if (window.location.href.includes("/generate")) return true;
+        if (targetBtn.disabled) return true;
+        return Array.from(document.querySelectorAll("button")).some((btn) => {
+          if (!isVisible(btn)) return false;
+          const text = btn.textContent || "";
+          return btn.disabled && textIncludes(text, "生成");
+        }) || null;
+      }, { timeoutMs: 15000, label: "video_generate_submission" }).catch(() => null);
+
+      return {
+        ok: true,
+        data: {
+          clicked: (targetBtn.textContent || "").trim().slice(0, 30),
+          processing: !!processing,
+        },
+        error: null,
+      };
+    } finally {
+      _videoGenerateClicked = false;
+    }
   }
 
   async function stepVideoWait(job) {
