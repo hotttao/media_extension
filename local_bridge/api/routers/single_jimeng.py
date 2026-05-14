@@ -201,14 +201,18 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
         f"{f'-mv-{body.movementId[:8]}' if body.movementId else ''}"
     )
     store = request.app.state.store
-    # If already completed, return existing job directly
+    # If already exists (any status), return it instead of trying to add a duplicate
     existing = store.get_job(job_id)
-    if existing and existing.status == "completed":
+    if existing:
         return SingleJobCreatedResponse(
             ok=True,
             job={"id": existing.id, "caseFile": str(existing.case_file), "mediaAi": public_media_ai(existing.media_ai)},
-            message="Job already completed",
+            message=f"Job already exists with status: {existing.status}",
         )
+    jobs = store.add_jobs([case_path])
+    if not jobs:
+        raise HTTPException(status_code=500, detail=f"Failed to create job {job_id}: add_jobs returned empty")
+    job = jobs[0]
     task_dir = store.output_root / job_id
     input_dir = task_dir / "input"
     assets_dir = input_dir / "assets"
