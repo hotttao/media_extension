@@ -69,8 +69,28 @@ class StateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # /v1/job/claim
 # ---------------------------------------------------------------------------
+class AssetInfo(BaseModel):
+    index: int
+    label: str
+    name: str
+    mimeType: str
+    url: str
+
+
+class JobClaimed(BaseModel):
+    id: str
+    caseFile: str
+    prompt: str | None = None
+    assets: list[AssetInfo] = []
+    timeoutSeconds: int = 900
+    platform: str | None = None
+    targetUrl: str | None = None
+    styleImageId: str | None = None
+    sceneId: str | None = None
+
+
 class ClaimResponse(BaseModel):
-    job: dict[str, Any] | None = None
+    job: JobClaimed | None = None
 
 
 # ---------------------------------------------------------------------------
