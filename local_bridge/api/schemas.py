@@ -9,6 +9,30 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 # Shared
 # ---------------------------------------------------------------------------
+
+
+class MediaAiInfo(BaseModel):
+    """Job sidecar media-ai metadata. Fields vary by job kind."""
+
+    kind: str | None = Field(None, description="Job kind: first-frame-image, style-image, model-image, video")
+    platform: str | None = Field(None, description="Execution platform: jimeng or gpt")
+    baseUrl: str | None = Field(None, description="Media AI service base URL")
+    productId: str | None = Field(None, description="Product ID on Media AI platform")
+    productName: str | None = Field(None, description="Product display name")
+    ipId: str | None = Field(None, description="IP/character ID")
+    styleImageId: str | None = Field(None, description="定妆图 ID (for first-frame-image with jimeng)")
+    styleImageUrl: str | None = Field(None, description="定妆图 URL")
+    sceneId: str | None = Field(None, description="场景 ID (for first-frame-image with jimeng)")
+    sceneName: str | None = Field(None, description="场景名称")
+    sceneUrl: str | None = Field(None, description="场景图片 URL")
+    uploadSubDir: str | None = Field(None, description="Upload subdirectory on Media AI")
+    firstFrameId: str | None = Field(None, description="首帧图 ID (for video)")
+    firstFrameUrl: str | None = Field(None, description="首帧图 URL")
+    movement: str | None = Field(None, description="动作描述 (for video)")
+    modelImageId: str | None = Field(None, description="模特图 ID (for style-image/model-image)")
+    poseId: str | None = Field(None, description="姿势 ID (for style-image)")
+
+
 class ErrorResponse(BaseModel):
     ok: bool = False
     error: str
@@ -35,7 +59,7 @@ class JobInfo(BaseModel):
     id: str
     caseFile: str
     prompt: str | None = None
-    mediaAi: dict[str, Any] | None = None
+    mediaAi: MediaAiInfo | None = None
 
 
 class JobCreatedResponse(BaseModel):
@@ -59,7 +83,7 @@ class JobStatusResponse(BaseModel):
     failureReason: str | None = None
     outputDir: str | None = None
     latestProgress: dict[str, Any] | None = None
-    mediaAi: dict[str, Any] | None = None
+    mediaAi: MediaAiInfo | None = None
 
 
 class StateResponse(BaseModel):
@@ -181,12 +205,131 @@ class DeleteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Single task endpoints
 # ---------------------------------------------------------------------------
-class SingleJobCreatedResponse(BaseModel):
+class SingleJobCreatedResponseBase(BaseModel):
+    """公共字段：所有 /v1/single 接口的 response 都继承此类."""
     ok: bool
-    job: JobInfo | None = None
     dryRun: bool | None = None
     caseFile: str | None = None
     message: str | None = None
+
+
+# ---- jimeng-image ----
+class JimengImageMediaAi(BaseModel):
+    """mediaAi for /v1/single/jimeng-image."""
+    kind: str = "first-frame-image"
+    platform: str = "jimeng"
+    baseUrl: str | None = None
+    productId: str | None = None
+    productName: str | None = None
+    ipId: str | None = None
+    styleImageId: str | None = None
+    styleImageUrl: str | None = None
+    sceneId: str | None = None
+    sceneName: str | None = None
+    sceneUrl: str | None = None
+    uploadSubDir: str | None = None
+
+
+class JimengImageJob(BaseModel):
+    id: str
+    caseFile: str
+    mediaAi: JimengImageMediaAi | None = None
+
+
+class JimengImageCreatedResponse(SingleJobCreatedResponseBase):
+    job: JimengImageJob | None = None
+
+
+# ---- jimeng-video ----
+class JimengVideoMediaAi(BaseModel):
+    """mediaAi for /v1/single/jimeng-video."""
+    kind: str = "video"
+    platform: str = "jimeng"
+    baseUrl: str | None = None
+    productId: str | None = None
+    productName: str | None = None
+    ipId: str | None = None
+    firstFrameId: str | None = None
+    firstFrameUrl: str | None = None
+    movement: str | None = None
+    uploadSubDir: str | None = None
+
+
+class JimengVideoJob(BaseModel):
+    id: str
+    caseFile: str
+    mediaAi: JimengVideoMediaAi | None = None
+
+
+class JimengVideoCreatedResponse(SingleJobCreatedResponseBase):
+    job: JimengVideoJob | None = None
+
+
+# ---- style-image (GPT) ----
+class GptStyleImageMediaAi(BaseModel):
+    """mediaAi for /v1/single/style-image."""
+    kind: str = "style-image"
+    platform: str = "gpt"
+    baseUrl: str | None = None
+    modelImageId: str | None = None
+    poseId: str | None = None
+    uploadSubDir: str | None = None
+
+
+class GptStyleImageJob(BaseModel):
+    id: str
+    caseFile: str
+    mediaAi: GptStyleImageMediaAi | None = None
+
+
+class StyleImageCreatedResponse(SingleJobCreatedResponseBase):
+    job: GptStyleImageJob | None = None
+
+
+# ---- model-image (GPT) ----
+class GptModelImageMediaAi(BaseModel):
+    """mediaAi for /v1/single/model-image."""
+    kind: str = "model-image"
+    platform: str = "gpt"
+    baseUrl: str | None = None
+    productId: str | None = None
+    productName: str | None = None
+    ipId: str | None = None
+    uploadSubDir: str | None = None
+
+
+class GptModelImageJob(BaseModel):
+    id: str
+    caseFile: str
+    mediaAi: GptModelImageMediaAi | None = None
+
+
+class ModelImageCreatedResponse(SingleJobCreatedResponseBase):
+    job: GptModelImageJob | None = None
+
+
+# ---- first-frame-image (GPT) ----
+class GptFirstFrameImageMediaAi(BaseModel):
+    """mediaAi for /v1/single/first-frame-image."""
+    kind: str = "first-frame-image"
+    platform: str = "gpt"
+    baseUrl: str | None = None
+    productId: str | None = None
+    productName: str | None = None
+    ipId: str | None = None
+    styleImageId: str | None = None
+    sceneId: str | None = None
+    uploadSubDir: str | None = None
+
+
+class GptFirstFrameImageJob(BaseModel):
+    id: str
+    caseFile: str
+    mediaAi: GptFirstFrameImageMediaAi | None = None
+
+
+class FirstFrameImageCreatedResponse(SingleJobCreatedResponseBase):
+    job: GptFirstFrameImageJob | None = None
 
 
 class JimengImageCreateRequest(BaseModel):

@@ -186,7 +186,8 @@
       "Bash(curl -s -X:*)",
       "Read(//d/Code/media/media_ai/app/api/products/**)",
       "Read(//d/Code/media/media_ai/**)",
-      "Bash(find D:/Code/media/media_ai/app -name *video* -type d)"
+      "Bash(find D:/Code/media/media_ai/app -name *video* -type d)",
+      "Bash(grep -A5 '\"\"/job/watch\"\"' docs/openapi.json)"
     ]
   }
 }

@@ -117,6 +117,13 @@
               "v1",
               "job",
               "claim"
+            ],
+            "query": [
+              {
+                "key": "platform",
+                "value": "",
+                "type": "text"
+              }
             ]
           },
           "description": ""
@@ -389,6 +396,13 @@
               "v1",
               "jobs",
               "cancel"
+            ],
+            "query": [
+              {
+                "key": "platform",
+                "value": "",
+                "type": "text"
+              }
             ]
           },
           "description": ""
@@ -428,6 +442,52 @@
             "variable": [
               {
                 "key": "job_id",
+                "type": "string"
+              }
+            ]
+          },
+          "description": ""
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Serve Asset",
+      "request": {
+        "name": "Serve Asset",
+        "request": {
+          "method": "GET",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/assets/{{job_id}}/{{index}}",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "assets",
+              "{{job_id}}",
+              "{{index}}"
+            ],
+            "variable": [
+              {
+                "key": "job_id",
+                "type": "string"
+              },
+              {
+                "key": "index",
                 "type": "string"
               }
             ]
@@ -653,6 +713,53 @@
               }
             }
           }
+        },
+        "response": []
+      },
+      "response": []
+    },
+    {
+      "name": "Watch Jobs",
+      "request": {
+        "name": "Watch Jobs",
+        "request": {
+          "method": "GET",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json",
+              "type": "text"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "type": "text"
+            }
+          ],
+          "url": {
+            "raw": "{{baseUrl}}/v1/job/watch",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "v1",
+              "job",
+              "watch"
+            ],
+            "query": [
+              {
+                "key": "job_id",
+                "value": "",
+                "type": "text"
+              },
+              {
+                "key": "platform",
+                "value": "",
+                "type": "text"
+              }
+            ]
+          },
+          "description": "SSE endpoint to watch job status changes.\nNo polling needed - server pushes events on status changes."
         },
         "response": []
       },

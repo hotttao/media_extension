@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request
 from local_bridge.api.schemas import (
     FirstFrameImageCreateRequest,
-    SingleJobCreatedResponse,
+    FirstFrameImageCreatedResponse,
+    GptFirstFrameImageJob,
+    GptFirstFrameImageMediaAi,
 )
 from local_bridge.infrastructure.media_ai_client import MediaAIClient, _scene_key, _scene_name
 from loguru import logger
@@ -15,7 +17,7 @@ def _build_job_id(style_image_id: str, scene_id: str, product_name: str, scene_n
     return f"{slugify(product_name)}-{style_image_id[:8]}__style-{style_image_id}__scene-{slugify(scene_name)}-{scene_id[:8]}"
 
 
-@router.post("/single/first-frame-image", response_model=SingleJobCreatedResponse, responses={400: {"model": dict}, 404: {"model": dict}})
+@router.post("/single/first-frame-image", response_model=FirstFrameImageCreatedResponse, responses={400: {"model": dict}, 404: {"model": dict}})
 def create_first_frame_image(body: FirstFrameImageCreateRequest, request: Request):
     from pathlib import Path
     from local_bridge.domain.models import load_media_ai_sidecar, public_media_ai
@@ -74,17 +76,21 @@ def create_first_frame_image(body: FirstFrameImageCreateRequest, request: Reques
 
     dry_run = "dry-run" in request.query_params or "dry_run" in request.query_params
     if dry_run:
-        return SingleJobCreatedResponse(
+        return FirstFrameImageCreatedResponse(
             ok=True,
             dryRun=True,
             caseFile=str(case_path),
-            mediaAi=public_media_ai(load_media_ai_sidecar(case_path)),
             message="Dry-run: task built but not enqueued",
         )
 
     jobs = store.add_jobs([case_path])
     job = jobs[0]
-    return SingleJobCreatedResponse(
+    sidecar = public_media_ai(load_media_ai_sidecar(case_path))
+    return FirstFrameImageCreatedResponse(
         ok=True,
-        job={"id": job.id, "caseFile": str(job.case_file), "mediaAi": public_media_ai(job.media_ai)},
+        job=GptFirstFrameImageJob(
+            id=job.id,
+            caseFile=str(job.case_file),
+            mediaAi=GptFirstFrameImageMediaAi.model_validate(sidecar) if sidecar else None,
+        ),
     )

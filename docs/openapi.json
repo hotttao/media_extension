@@ -654,7 +654,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SingleJobCreatedResponse"
+                  "$ref": "#/components/schemas/ModelImageCreatedResponse"
                 }
               }
             }
@@ -720,7 +720,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SingleJobCreatedResponse"
+                  "$ref": "#/components/schemas/StyleImageCreatedResponse"
                 }
               }
             }
@@ -786,7 +786,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SingleJobCreatedResponse"
+                  "$ref": "#/components/schemas/FirstFrameImageCreatedResponse"
                 }
               }
             }
@@ -852,7 +852,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SingleJobCreatedResponse"
+                  "$ref": "#/components/schemas/JimengImageCreatedResponse"
                 }
               }
             }
@@ -918,7 +918,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SingleJobCreatedResponse"
+                  "$ref": "#/components/schemas/JimengVideoCreatedResponse"
                 }
               }
             }
@@ -1212,6 +1212,373 @@
         ],
         "title": "FirstFrameImageCreateRequest"
       },
+      "FirstFrameImageCreatedResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "dryRun": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dryrun"
+          },
+          "caseFile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Casefile"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GptFirstFrameImageJob"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "FirstFrameImageCreatedResponse"
+      },
+      "GptFirstFrameImageJob": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "caseFile": {
+            "type": "string",
+            "title": "Casefile"
+          },
+          "mediaAi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GptFirstFrameImageMediaAi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "caseFile"
+        ],
+        "title": "GptFirstFrameImageJob"
+      },
+      "GptFirstFrameImageMediaAi": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "first-frame-image"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": "gpt"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "productId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productid"
+          },
+          "productName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productname"
+          },
+          "ipId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipid"
+          },
+          "styleImageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleimageid"
+          },
+          "sceneId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sceneid"
+          },
+          "uploadSubDir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploadsubdir"
+          }
+        },
+        "type": "object",
+        "title": "GptFirstFrameImageMediaAi",
+        "description": "mediaAi for /v1/single/first-frame-image."
+      },
+      "GptModelImageJob": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "caseFile": {
+            "type": "string",
+            "title": "Casefile"
+          },
+          "mediaAi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GptModelImageMediaAi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "caseFile"
+        ],
+        "title": "GptModelImageJob"
+      },
+      "GptModelImageMediaAi": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "model-image"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": "gpt"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "productId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productid"
+          },
+          "productName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productname"
+          },
+          "ipId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipid"
+          },
+          "uploadSubDir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploadsubdir"
+          }
+        },
+        "type": "object",
+        "title": "GptModelImageMediaAi",
+        "description": "mediaAi for /v1/single/model-image."
+      },
+      "GptStyleImageJob": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "caseFile": {
+            "type": "string",
+            "title": "Casefile"
+          },
+          "mediaAi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GptStyleImageMediaAi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "caseFile"
+        ],
+        "title": "GptStyleImageJob"
+      },
+      "GptStyleImageMediaAi": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "style-image"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": "gpt"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "modelImageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelimageid"
+          },
+          "poseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poseid"
+          },
+          "uploadSubDir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploadsubdir"
+          }
+        },
+        "type": "object",
+        "title": "GptStyleImageMediaAi",
+        "description": "mediaAi for /v1/single/style-image."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1342,6 +1709,217 @@
         ],
         "title": "JimengImageCreateRequest"
       },
+      "JimengImageCreatedResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "dryRun": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dryrun"
+          },
+          "caseFile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Casefile"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JimengImageJob"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "JimengImageCreatedResponse"
+      },
+      "JimengImageJob": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "caseFile": {
+            "type": "string",
+            "title": "Casefile"
+          },
+          "mediaAi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JimengImageMediaAi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "caseFile"
+        ],
+        "title": "JimengImageJob"
+      },
+      "JimengImageMediaAi": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "first-frame-image"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": "jimeng"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "productId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productid"
+          },
+          "productName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productname"
+          },
+          "ipId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipid"
+          },
+          "styleImageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleimageid"
+          },
+          "styleImageUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleimageurl"
+          },
+          "sceneId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sceneid"
+          },
+          "sceneName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenename"
+          },
+          "sceneUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sceneurl"
+          },
+          "uploadSubDir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploadsubdir"
+          }
+        },
+        "type": "object",
+        "title": "JimengImageMediaAi",
+        "description": "mediaAi for /v1/single/jimeng-image."
+      },
       "JimengVideoCreateRequest": {
         "properties": {
           "productId": {
@@ -1412,6 +1990,195 @@
         },
         "type": "object",
         "title": "JimengVideoCreateRequest"
+      },
+      "JimengVideoCreatedResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "dryRun": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dryrun"
+          },
+          "caseFile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Casefile"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JimengVideoJob"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "JimengVideoCreatedResponse"
+      },
+      "JimengVideoJob": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "caseFile": {
+            "type": "string",
+            "title": "Casefile"
+          },
+          "mediaAi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JimengVideoMediaAi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "caseFile"
+        ],
+        "title": "JimengVideoJob"
+      },
+      "JimengVideoMediaAi": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "video"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": "jimeng"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "productId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productid"
+          },
+          "productName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productname"
+          },
+          "ipId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipid"
+          },
+          "firstFrameId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstframeid"
+          },
+          "firstFrameUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstframeurl"
+          },
+          "movement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movement"
+          },
+          "uploadSubDir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploadsubdir"
+          }
+        },
+        "type": "object",
+        "title": "JimengVideoMediaAi",
+        "description": "mediaAi for /v1/single/jimeng-video."
       },
       "JobClaimed": {
         "properties": {
@@ -1544,14 +2311,12 @@
           "mediaAi": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/MediaAiInfo"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Mediaai"
+            ]
           }
         },
         "type": "object",
@@ -1678,14 +2443,12 @@
           "mediaAi": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/MediaAiInfo"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Mediaai"
+            ]
           }
         },
         "type": "object",
@@ -1726,6 +2489,217 @@
           "caseFiles"
         ],
         "title": "JobsCreateRequest"
+      },
+      "MediaAiInfo": {
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind",
+            "description": "Job kind: first-frame-image, style-image, model-image, video"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform",
+            "description": "Execution platform: jimeng or gpt"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl",
+            "description": "Media AI service base URL"
+          },
+          "productId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productid",
+            "description": "Product ID on Media AI platform"
+          },
+          "productName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Productname",
+            "description": "Product display name"
+          },
+          "ipId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipid",
+            "description": "IP/character ID"
+          },
+          "styleImageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleimageid",
+            "description": "定妆图 ID (for first-frame-image with jimeng)"
+          },
+          "styleImageUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleimageurl",
+            "description": "定妆图 URL"
+          },
+          "sceneId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sceneid",
+            "description": "场景 ID (for first-frame-image with jimeng)"
+          },
+          "sceneName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenename",
+            "description": "场景名称"
+          },
+          "sceneUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sceneurl",
+            "description": "场景图片 URL"
+          },
+          "uploadSubDir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploadsubdir",
+            "description": "Upload subdirectory on Media AI"
+          },
+          "firstFrameId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstframeid",
+            "description": "首帧图 ID (for video)"
+          },
+          "firstFrameUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstframeurl",
+            "description": "首帧图 URL"
+          },
+          "movement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movement",
+            "description": "动作描述 (for video)"
+          },
+          "modelImageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelimageid",
+            "description": "模特图 ID (for style-image/model-image)"
+          },
+          "poseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poseid",
+            "description": "姿势 ID (for style-image)"
+          }
+        },
+        "type": "object",
+        "title": "MediaAiInfo",
+        "description": "Job sidecar media-ai metadata. Fields vary by job kind."
       },
       "ModelImageCreateRequest": {
         "properties": {
@@ -1770,6 +2744,62 @@
         },
         "type": "object",
         "title": "ModelImageCreateRequest"
+      },
+      "ModelImageCreatedResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "dryRun": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dryrun"
+          },
+          "caseFile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Casefile"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GptModelImageJob"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "ModelImageCreatedResponse"
       },
       "ProgressUpdateRequest": {
         "properties": {
@@ -1914,62 +2944,6 @@
         ],
         "title": "ResultSubmitResponse"
       },
-      "SingleJobCreatedResponse": {
-        "properties": {
-          "ok": {
-            "type": "boolean",
-            "title": "Ok"
-          },
-          "job": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/JobInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "dryRun": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dryrun"
-          },
-          "caseFile": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Casefile"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message"
-          }
-        },
-        "type": "object",
-        "required": [
-          "ok"
-        ],
-        "title": "SingleJobCreatedResponse"
-      },
       "StateResponse": {
         "properties": {
           "jobs": {
@@ -2008,6 +2982,62 @@
           "poseId"
         ],
         "title": "StyleImageCreateRequest"
+      },
+      "StyleImageCreatedResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "dryRun": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dryrun"
+          },
+          "caseFile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Casefile"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GptStyleImageJob"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "StyleImageCreatedResponse"
       },
       "SuccessResponse": {
         "properties": {

@@ -161,3 +161,11 @@ pending → claimed → completed
 2. 插件轮询 `/v1/job/claim` 认领任务（claimed）
 3. 插件执行浏览器自动化
 4. 插件调用 `/v1/job/{id}/result` 或 `/v1/job/{id}/fail`
+
+
+## 更新 skills
+
+```bash
+npx openapi-to-skills docs/openapi.json -o .claude/skills/
+npx openapi-to-skills docs/openapi.json -o D:\Code\media\media_ai\.claude\skills
+```

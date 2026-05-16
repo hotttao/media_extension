@@ -1,8 +1,10 @@
 """Router for POST /v1/single/model-image."""
 from fastapi import APIRouter, HTTPException, Request
 from local_bridge.api.schemas import (
+    GptModelImageJob,
+    GptModelImageMediaAi,
     ModelImageCreateRequest,
-    SingleJobCreatedResponse,
+    ModelImageCreatedResponse,
 )
 from local_bridge.infrastructure.media_ai_client import MediaAIClient, slugify
 from loguru import logger
@@ -10,7 +12,7 @@ from loguru import logger
 router = APIRouter(tags=["single"])
 
 
-@router.post("/single/model-image", response_model=SingleJobCreatedResponse, responses={400: {"model": dict}, 404: {"model": dict}})
+@router.post("/single/model-image", response_model=ModelImageCreatedResponse, responses={400: {"model": dict}, 404: {"model": dict}})
 def create_model_image(body: ModelImageCreateRequest, request: Request):
     from pathlib import Path
     from local_bridge.domain.models import load_media_ai_sidecar, public_media_ai
@@ -78,17 +80,21 @@ def create_model_image(body: ModelImageCreateRequest, request: Request):
 
     dry_run = "dry-run" in request.query_params or "dry_run" in request.query_params
     if dry_run:
-        return SingleJobCreatedResponse(
+        return ModelImageCreatedResponse(
             ok=True,
             dryRun=True,
             caseFile=str(case_path),
-            mediaAi=public_media_ai(load_media_ai_sidecar(case_path)),
             message="Dry-run: task built but not enqueued",
         )
 
     jobs = store.add_jobs([case_path])
     job = jobs[0]
-    return SingleJobCreatedResponse(
+    sidecar = public_media_ai(load_media_ai_sidecar(case_path))
+    return ModelImageCreatedResponse(
         ok=True,
-        job={"id": job.id, "caseFile": str(job.case_file), "mediaAi": public_media_ai(job.media_ai)},
+        job=GptModelImageJob(
+            id=job.id,
+            caseFile=str(job.case_file),
+            mediaAi=GptModelImageMediaAi.model_validate(sidecar) if sidecar else None,
+        ),
     )

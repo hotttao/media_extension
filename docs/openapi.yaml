@@ -59,6 +59,17 @@ paths:
       operationId: "claim_job_v1_job_claim_get"
       parameters:
         -
+          name: "platform"
+          in: "query"
+          required: False
+          schema:
+            anyOf:
+              -
+                type: "string"
+              -
+                type: "null"
+            title: "Platform"
+        -
           name: "x-worker-id"
           in: "header"
           required: False
@@ -295,6 +306,18 @@ paths:
         - "jobs"
       summary: "Cancel All Jobs"
       operationId: "cancel_all_jobs_v1_jobs_cancel_post"
+      parameters:
+        -
+          name: "platform"
+          in: "query"
+          required: False
+          schema:
+            anyOf:
+              -
+                type: "string"
+              -
+                type: "null"
+            title: "Platform"
       responses:
         200:
           description: "Successful Response"
@@ -302,6 +325,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CancelAllResponse"
+        422:
+          description: "Validation Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
   /v1/job/{job_id}:
     delete:
       tags:
@@ -340,6 +369,40 @@ paths:
                 additionalProperties: True
                 title: "Response 409 Delete Job V1 Job  Job Id  Delete"
           description: "Conflict"
+        422:
+          description: "Validation Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+  /v1/assets/{job_id}/{index}:
+    get:
+      tags:
+        - "assets"
+        - "assets"
+      summary: "Serve Asset"
+      operationId: "serve_asset_v1_assets__job_id___index__get"
+      parameters:
+        -
+          name: "job_id"
+          in: "path"
+          required: True
+          schema:
+            type: "string"
+            title: "Job Id"
+        -
+          name: "index"
+          in: "path"
+          required: True
+          schema:
+            type: "integer"
+            title: "Index"
+      responses:
+        200:
+          description: "Successful Response"
+          content:
+            application/json:
+              schema: {}
         422:
           description: "Validation Error"
           content:
@@ -542,6 +605,53 @@ paths:
                 additionalProperties: True
                 type: "object"
                 title: "Response 400 Create Jimeng Video V1 Single Jimeng Video Post"
+        422:
+          description: "Validation Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+  /v1/job/watch:
+    get:
+      tags:
+        - "job"
+        - "job"
+      summary: "Watch Jobs"
+      description: "SSE endpoint to watch job status changes.\nNo polling needed - server pushes events on status changes."
+      operationId: "watch_jobs_v1_job_watch_get"
+      parameters:
+        -
+          name: "job_id"
+          in: "query"
+          required: False
+          schema:
+            anyOf:
+              -
+                type: "string"
+              -
+                type: "null"
+            description: "Filter events for specific job"
+            title: "Job Id"
+          description: "Filter events for specific job"
+        -
+          name: "platform"
+          in: "query"
+          required: False
+          schema:
+            anyOf:
+              -
+                type: "string"
+              -
+                type: "null"
+            description: "Filter events for specific platform"
+            title: "Platform"
+          description: "Filter events for specific platform"
+      responses:
+        200:
+          description: "Successful Response"
+          content:
+            application/json:
+              schema: {}
         422:
           description: "Validation Error"
           content:
@@ -753,7 +863,11 @@ components:
     JimengVideoCreateRequest:
       properties:
         productId:
-          type: "string"
+          anyOf:
+            -
+              type: "string"
+            -
+              type: "null"
           title: "Productid"
         ipId:
           anyOf:
@@ -792,8 +906,6 @@ components:
           title: "Noembedcookie"
           default: False
       type: "object"
-      required:
-        - "productId"
       title: "JimengVideoCreateRequest"
     JobCreatedResponse:
       properties:
@@ -849,6 +961,27 @@ components:
         status:
           type: "string"
           title: "Status"
+        platform:
+          anyOf:
+            -
+              type: "string"
+            -
+              type: "null"
+          title: "Platform"
+        platformId:
+          anyOf:
+            -
+              type: "string"
+            -
+              type: "null"
+          title: "Platformid"
+        targetUrl:
+          anyOf:
+            -
+              type: "string"
+            -
+              type: "null"
+          title: "Targeturl"
         createdAt:
           anyOf:
             -

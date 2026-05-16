@@ -24,6 +24,7 @@ from local_bridge.api.routers import (
     single_style_image_router,
     single_first_frame_router,
     single_jimeng_router,
+    job_watch_router,
 )
 from local_bridge.infrastructure.media_ai_client import MediaAIClient
 from local_bridge.infrastructure.persistence import JobStore
@@ -77,6 +78,7 @@ def create_app(store: JobStore | None = None) -> FastAPI:
     app.include_router(single_style_image_router, prefix="/v1", tags=["single"])
     app.include_router(single_first_frame_router, prefix="/v1", tags=["single"])
     app.include_router(single_jimeng_router, prefix="/v1", tags=["single"])
+    app.include_router(job_watch_router, prefix="/v1", tags=["job"])
 
     return app
 

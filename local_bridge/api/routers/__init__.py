@@ -13,6 +13,7 @@ from local_bridge.api.routers.single_model_image import router as single_model_i
 from local_bridge.api.routers.single_style_image import router as single_style_image_router
 from local_bridge.api.routers.single_first_frame import router as single_first_frame_router
 from local_bridge.api.routers.single_jimeng import router as single_jimeng_router
+from local_bridge.api.routers.job_watch import router as job_watch_router
 
 __all__ = [
     "jobs_router",
@@ -29,4 +30,5 @@ __all__ = [
     "single_style_image_router",
     "single_first_frame_router",
     "single_jimeng_router",
+    "job_watch_router",
 ]

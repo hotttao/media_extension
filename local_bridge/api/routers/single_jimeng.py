@@ -2,8 +2,13 @@
 from fastapi import APIRouter, HTTPException, Request
 from local_bridge.api.schemas import (
     JimengImageCreateRequest,
+    JimengImageCreatedResponse,
+    JimengImageJob,
+    JimengImageMediaAi,
     JimengVideoCreateRequest,
-    SingleJobCreatedResponse,
+    JimengVideoCreatedResponse,
+    JimengVideoJob,
+    JimengVideoMediaAi,
 )
 from local_bridge.domain.services import resolve_media_url, extension_from_url, slugify
 
@@ -16,7 +21,7 @@ def _is_dry_run(request: Request) -> bool:
     return "dry-run" in request.query_params or "dry_run" in request.query_params
 
 
-@router.post("/single/jimeng-image", response_model=SingleJobCreatedResponse, responses={400: {"model": dict}, 404: {"model": dict}})
+@router.post("/single/jimeng-image", response_model=JimengImageCreatedResponse, responses={400: {"model": dict}, 404: {"model": dict}})
 def create_jimeng_image(body: JimengImageCreateRequest, request: Request):
     from pathlib import Path
     import json
@@ -146,24 +151,28 @@ def create_jimeng_image(body: JimengImageCreateRequest, request: Request):
 
     dry_run = _is_dry_run(request)
     if dry_run:
-        return SingleJobCreatedResponse(
+        return JimengImageCreatedResponse(
             ok=True,
             dryRun=True,
             caseFile=str(case_path),
-            mediaAi=public_media_ai(load_media_ai_sidecar(case_path)),
             message="Dry-run: task built but not enqueued",
         )
 
     store = request.app.state.store
     jobs = store.add_jobs([case_path])
     job = jobs[0]
-    return SingleJobCreatedResponse(
+    sidecar = public_media_ai(load_media_ai_sidecar(case_path))
+    return JimengImageCreatedResponse(
         ok=True,
-        job={"id": job.id, "caseFile": str(job.case_file), "mediaAi": public_media_ai(job.media_ai)},
+        job=JimengImageJob(
+            id=job.id,
+            caseFile=str(job.case_file),
+            mediaAi=JimengImageMediaAi.model_validate(sidecar) if sidecar else None,
+        ),
     )
 
 
-@router.post("/single/jimeng-video", response_model=SingleJobCreatedResponse, responses={400: {"model": dict}})
+@router.post("/single/jimeng-video", response_model=JimengVideoCreatedResponse, responses={400: {"model": dict}})
 def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
     from pathlib import Path
     import json
@@ -204,9 +213,14 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
     # If already exists (any status), return it instead of trying to add a duplicate
     existing = store.get_job(job_id)
     if existing:
-        return SingleJobCreatedResponse(
+        sidecar = public_media_ai(existing.media_ai)
+        return JimengVideoCreatedResponse(
             ok=True,
-            job={"id": existing.id, "caseFile": str(existing.case_file), "mediaAi": public_media_ai(existing.media_ai)},
+            job=JimengVideoJob(
+                id=existing.id,
+                caseFile=str(existing.case_file),
+                mediaAi=JimengVideoMediaAi.model_validate(sidecar) if sidecar else None,
+            ),
             message=f"Job already exists with status: {existing.status}",
         )
     jobs = store.add_jobs([case_path])
@@ -271,18 +285,22 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
 
     dry_run = _is_dry_run(request)
     if dry_run:
-        return SingleJobCreatedResponse(
+        return JimengVideoCreatedResponse(
             ok=True,
             dryRun=True,
             caseFile=str(case_path),
-            mediaAi=public_media_ai(load_media_ai_sidecar(case_path)),
             message="Dry-run: task built but not enqueued",
         )
 
     store = request.app.state.store
     jobs = store.add_jobs([case_path])
     job = jobs[0]
-    return SingleJobCreatedResponse(
+    sidecar = public_media_ai(load_media_ai_sidecar(case_path))
+    return JimengVideoCreatedResponse(
         ok=True,
-        job={"id": job.id, "caseFile": str(job.case_file), "mediaAi": public_media_ai(job.media_ai)},
+        job=JimengVideoJob(
+            id=job.id,
+            caseFile=str(job.case_file),
+            mediaAi=JimengVideoMediaAi.model_validate(sidecar) if sidecar else None,
+        ),
     )

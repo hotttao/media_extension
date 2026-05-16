@@ -42,6 +42,8 @@ class JobStore:
                 job.worker_id = worker_id
                 job.output_dir.mkdir(parents=True, exist_ok=True)
                 (job.output_dir / "prompt.md").write_text(job.prompt, encoding="utf-8")
+                from local_bridge.infrastructure.events import emit
+                emit({"type": "status_change", "job_id": job.id, "status": "running", "platform": job.platform})
                 return job
         return None
 
@@ -57,6 +59,8 @@ class JobStore:
             job = self._get_job_or_raise(job_id)
             job.status = "completed"
             job.finished_at = utc_now_iso()
+            from local_bridge.infrastructure.events import emit
+            emit({"type": "status_change", "job_id": job.id, "status": "completed", "platform": job.platform})
             return job
 
     def mark_failed(self, job_id: str, reason: str) -> Job:
@@ -65,6 +69,8 @@ class JobStore:
             job.status = "failed"
             job.finished_at = utc_now_iso()
             job.failure_reason = reason
+            from local_bridge.infrastructure.events import emit
+            emit({"type": "status_change", "job_id": job.id, "status": "failed", "platform": job.platform, "reason": reason})
             return job
 
     def requeue(self, job_id: str) -> Job:
