@@ -90,6 +90,22 @@
         "operationId": "claim_job_v1_job_claim_get",
         "parameters": [
           {
+            "name": "platform",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
+            }
+          },
+          {
             "name": "x-worker-id",
             "in": "header",
             "required": false,
@@ -455,6 +471,24 @@
         ],
         "summary": "Cancel All Jobs",
         "operationId": "cancel_all_jobs_v1_jobs_cancel_post",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -462,6 +496,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CancelAllResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -522,6 +566,56 @@
               }
             },
             "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/assets/{job_id}/{index}": {
+      "get": {
+        "tags": [
+          "assets",
+          "assets"
+        ],
+        "summary": "Serve Asset",
+        "operationId": "serve_asset_v1_assets__job_id___index__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Index"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -853,10 +947,112 @@
           }
         }
       }
+    },
+    "/v1/job/watch": {
+      "get": {
+        "tags": [
+          "job",
+          "job"
+        ],
+        "summary": "Watch Jobs",
+        "description": "SSE endpoint to watch job status changes.\nNo polling needed - server pushes events on status changes.",
+        "operationId": "watch_jobs_v1_job_watch_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter events for specific job",
+              "title": "Job Id"
+            },
+            "description": "Filter events for specific job"
+          },
+          {
+            "name": "platform",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter events for specific platform",
+              "title": "Platform"
+            },
+            "description": "Filter events for specific platform"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AssetInfo": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "mimeType": {
+            "type": "string",
+            "title": "Mimetype"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "label",
+          "name",
+          "mimeType",
+          "url"
+        ],
+        "title": "AssetInfo"
+      },
       "CancelAllResponse": {
         "properties": {
           "ok": {
@@ -907,14 +1103,12 @@
           "job": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/JobClaimed"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Job"
+            ]
           }
         },
         "type": "object",
@@ -1151,7 +1345,14 @@
       "JimengVideoCreateRequest": {
         "properties": {
           "productId": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Productid"
           },
           "ipId": {
@@ -1210,10 +1411,93 @@
           }
         },
         "type": "object",
-        "required": [
-          "productId"
-        ],
         "title": "JimengVideoCreateRequest"
+      },
+      "JobClaimed": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "caseFile": {
+            "type": "string",
+            "title": "Casefile"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/AssetInfo"
+            },
+            "type": "array",
+            "title": "Assets",
+            "default": []
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "title": "Timeoutseconds",
+            "default": 900
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "targetUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targeturl"
+          },
+          "styleImageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styleimageid"
+          },
+          "sceneId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sceneid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "caseFile"
+        ],
+        "title": "JobClaimed"
       },
       "JobCreatedResponse": {
         "properties": {
@@ -1290,6 +1574,39 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "platformId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platformid"
+          },
+          "targetUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targeturl"
           },
           "createdAt": {
             "anyOf": [
