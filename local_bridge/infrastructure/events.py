@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 _observers: list[Callable[[dict[str, Any]], None]] = []
 _lock = threading.Lock()
+_sse_loop: asyncio.AbstractEventLoop | None = None
 
 
 def emit(event: dict[str, Any]) -> None:
@@ -40,6 +41,8 @@ async def event_generator(
     Async generator that yields job events as SSE data.
     Optionally filter by job_id or platform.
     """
+    global _sse_loop
+    _sse_loop = asyncio.get_running_loop()
     queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
     def observer(event: dict[str, Any]) -> None:
@@ -49,7 +52,10 @@ async def event_generator(
         # Filter by platform if specified
         if platform and event.get("platform") != platform:
             return
-        asyncio.run_coroutine_threadsafe(queue.put(event), asyncio.get_event_loop())
+        # Use the SSE request's event loop (stored at subscription time)
+        loop = _sse_loop
+        if loop and not loop.is_closed():
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
     subscribe(observer)
     try:
@@ -62,3 +68,4 @@ async def event_generator(
         pass
     finally:
         unsubscribe(observer)
+        _sse_loop = None
