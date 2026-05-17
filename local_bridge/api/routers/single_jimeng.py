@@ -223,10 +223,6 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
             ),
             message=f"Job already exists with status: {existing.status}",
         )
-    jobs = store.add_jobs([case_path])
-    if not jobs:
-        raise HTTPException(status_code=500, detail=f"Failed to create job {job_id}: add_jobs returned empty")
-    job = jobs[0]
     task_dir = store.output_root / job_id
     input_dir = task_dir / "input"
     assets_dir = input_dir / "assets"
