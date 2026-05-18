@@ -9,6 +9,7 @@
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
 | `ipId` | query | string | No |  |
+| `modelImageId` | query | string | No |  |
 
 ## Responses
 

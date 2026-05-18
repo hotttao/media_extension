@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [ModelImageSaveRequest](../schemas/Model/ModelImageSaveRequest.md)
+
 ## Responses
 
 | Status | Description |

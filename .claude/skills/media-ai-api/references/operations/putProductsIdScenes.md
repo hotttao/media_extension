@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [ScenesUpdate](../schemas/Scenes/ScenesUpdate.md)
+
 ## Responses
 
 | Status | Description |

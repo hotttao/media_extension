@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [VideoPushClipRequest](../schemas/Video/VideoPushClipRequest.md)
+
 ## Responses
 
 | Status | Description |
@@ -18,7 +20,6 @@
 | 201 | Success |
 | 400 | Error |
 | 401 | Error |
-| 500 | Error |
 
 **Success Response Schema:**
 

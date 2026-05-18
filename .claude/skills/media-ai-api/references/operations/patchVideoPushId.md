@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [VideoPushUpdate](../schemas/Video/VideoPushUpdate.md)
+
 ## Responses
 
 | Status | Description |
@@ -28,5 +30,5 @@
 
 **Success Response Schema:**
 
-[SuccessResponse](../schemas/Success/SuccessResponse.md)
+[VideoPushResponse](../schemas/Video/VideoPushResponse.md)
 

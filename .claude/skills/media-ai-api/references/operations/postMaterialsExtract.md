@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [MaterialExtractRequest](../schemas/Material/MaterialExtractRequest.md)
+
 ## Responses
 
 | Status | Description |

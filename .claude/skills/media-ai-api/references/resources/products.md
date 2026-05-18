@@ -9,6 +9,7 @@
 | POST | `/api/products/{id}/first-frame` | POST products id first frame | [View](../operations/postProductsIdFirstFrame.md) |
 | GET | `/api/products/{id}/first-frames` | GET products id first frames | [View](../operations/getProductsIdFirstFrames.md) |
 | POST | `/api/products/{id}/generate-video` | POST products id generate video | [View](../operations/postProductsIdGenerateVideo.md) |
+| GET | `/api/products/{id}/generated-materials/{type}/{materialId}/alternatives-count` | GET products id generated materials type materialId alternatives count | [View](../operations/getProductsIdGeneratedMaterialsTypeMaterialIdAlternativesCount.md) |
 | DELETE | `/api/products/{id}/generated-materials/{type}/{materialId}` | DELETE products id generated materials type materialId | [View](../operations/deleteProductsIdGeneratedMaterialsTypeMaterialId.md) |
 | GET | `/api/products/{id}/generated-materials` | GET products id generated materials | [View](../operations/getProductsIdGeneratedMaterials.md) |
 | DELETE | `/api/products/{id}/images/{imageId}` | DELETE products id images imageId | [View](../operations/deleteProductsIdImagesImageId.md) |
@@ -25,6 +26,9 @@
 | POST | `/api/products/{id}/style-image/save` | POST products id style image save | [View](../operations/postProductsIdStyleImageSave.md) |
 | GET | `/api/products/{id}/style-images` | GET products id style images | [View](../operations/getProductsIdStyleImages.md) |
 | GET | `/api/products/{id}/videos` | GET products id videos | [View](../operations/getProductsIdVideos.md) |
+| POST | `/api/products/{id}/videos` | POST products id videos | [View](../operations/postProductsIdVideos.md) |
+| DELETE | `/api/products/{id}/videos` | DELETE products id videos | [View](../operations/deleteProductsIdVideos.md) |
 | POST | `/api/products/extract` | POST products extract | [View](../operations/postProductsExtract.md) |
 | GET | `/api/products` | GET products | [View](../operations/getProducts.md) |
 | POST | `/api/products` | POST products | [View](../operations/postProducts.md) |
+| GET | `/api/products/search-for-ip` | GET products search for ip | [View](../operations/getProductsSearchForIp.md) |

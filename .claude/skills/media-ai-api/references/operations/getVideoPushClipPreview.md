@@ -10,6 +10,7 @@
 |------|------|------|----------|-------------|
 | `productId` | query | string | No |  |
 | `ipId` | query | string | No |  |
+| `sceneId` | query | string | No |  |
 
 ## Responses
 
@@ -22,5 +23,5 @@
 
 **Success Response Schema:**
 
-[SuccessResponse](../schemas/Success/SuccessResponse.md)
+[VideoPushClipPreview](../schemas/Video/VideoPushClipPreview.md)
 

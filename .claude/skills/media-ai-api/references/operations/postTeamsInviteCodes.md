@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [InviteCodeCreate](../schemas/Invite/InviteCodeCreate.md)
+
 ## Responses
 
 | Status | Description |

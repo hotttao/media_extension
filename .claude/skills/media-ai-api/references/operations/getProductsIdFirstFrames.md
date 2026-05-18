@@ -11,6 +11,7 @@
 | `id` | path | string | Yes |  |
 | `ipId` | query | string | No |  |
 | `styleImageId` | query | string | No |  |
+| `sceneId` | query | string | No |  |
 
 ## Responses
 

@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [DailyPublishPlanBatch](../schemas/Daily/DailyPublishPlanBatch.md)
+
 ## Responses
 
 | Status | Description |

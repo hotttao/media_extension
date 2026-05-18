@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [WorkflowExecuteRequest](../schemas/Workflow/WorkflowExecuteRequest.md)
+
 ## Responses
 
 | Status | Description |

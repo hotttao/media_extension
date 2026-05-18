@@ -9,6 +9,8 @@
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
 | `id` | path | string | Yes |  |
+| `movementId` | query | string | No |  |
+| `poseId` | query | string | No |  |
 
 ## Responses
 

@@ -10,6 +10,14 @@
 |------|------|------|----------|-------------|
 | `id` | path | string | Yes |  |
 
+## Request Body
+
+**Required:** Yes
+
+**Content Types:** `application/json`
+
+**Schema:** [VideoPushPublish](../schemas/Video/VideoPushPublish.md)
+
 ## Responses
 
 | Status | Description |

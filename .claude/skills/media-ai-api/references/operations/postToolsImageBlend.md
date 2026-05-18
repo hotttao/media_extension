@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [ImageBlendRequest](../schemas/Image/ImageBlendRequest.md)
+
 ## Responses
 
 | Status | Description |

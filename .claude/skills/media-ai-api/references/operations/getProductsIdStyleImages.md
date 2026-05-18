@@ -11,6 +11,7 @@
 | `id` | path | string | Yes |  |
 | `ipId` | query | string | No |  |
 | `modelImageId` | query | string | No |  |
+| `poseId` | query | string | No |  |
 
 ## Responses
 

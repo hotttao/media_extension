@@ -1,6 +1,6 @@
 # Product Schemas
 
-4 schemas in this group.
+5 schemas in this group.
 
 | Schema | Type | Description |
 |--------|------|-------------|
@@ -8,3 +8,4 @@
 | [Product](Product.md) | object | Product. |
 | [ProductList](ProductList.md) | array |  |
 | [ProductImage](ProductImage.md) | object | Product image. |
+| [ProductImageCreate](ProductImageCreate.md) | object | Add product image payload. |

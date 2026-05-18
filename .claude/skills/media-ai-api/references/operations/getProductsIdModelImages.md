@@ -10,6 +10,7 @@
 |------|------|------|----------|-------------|
 | `id` | path | string | Yes |  |
 | `ipId` | query | string | No |  |
+| `poseId` | query | string | No |  |
 
 ## Responses
 

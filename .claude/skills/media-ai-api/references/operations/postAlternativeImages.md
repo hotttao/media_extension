@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [AlternativeImageCreate](../schemas/Alternative/AlternativeImageCreate.md)
+
 ## Responses
 
 | Status | Description |
@@ -23,5 +25,5 @@
 
 **Success Response Schema:**
 
-[SuccessResponse](../schemas/Success/SuccessResponse.md)
+[AlternativeImage](../schemas/Alternative/AlternativeImage.md)
 

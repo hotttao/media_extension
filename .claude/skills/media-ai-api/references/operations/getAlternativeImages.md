@@ -23,5 +23,5 @@
 
 **Success Response Schema:**
 
-[SuccessResponse](../schemas/Success/SuccessResponse.md)
+[AlternativeImageList](../schemas/Alternative/AlternativeImageList.md)
 

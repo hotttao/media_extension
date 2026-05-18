@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [ProductImageCreate](../schemas/Product/ProductImageCreate.md)
+
 ## Responses
 
 | Status | Description |

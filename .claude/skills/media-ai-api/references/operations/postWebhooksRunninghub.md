@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [WebhookRunninghub](../schemas/Webhook/WebhookRunninghub.md)
+
 ## Responses
 
 | Status | Description |

@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [FirstFrameCreateRequest](../schemas/First/FirstFrameCreateRequest.md)
+
 ## Responses
 
 | Status | Description |

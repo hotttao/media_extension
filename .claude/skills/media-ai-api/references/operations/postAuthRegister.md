@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [RegisterRequest](../schemas/Register/RegisterRequest.md)
+
 ## Responses
 
 | Status | Description |

@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [UpdateMaterial](../schemas/Update/UpdateMaterial.md)
+
 ## Responses
 
 | Status | Description |
@@ -28,5 +30,5 @@
 
 **Success Response Schema:**
 
-[SuccessResponse](../schemas/Success/SuccessResponse.md)
+[Material](../schemas/Material/Material.md)
 

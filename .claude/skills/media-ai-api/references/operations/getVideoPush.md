@@ -22,5 +22,5 @@
 
 **Success Response Schema:**
 
-[SuccessResponse](../schemas/Success/SuccessResponse.md)
+[VideoPushListResponse](../schemas/Video/VideoPushListResponse.md)
 

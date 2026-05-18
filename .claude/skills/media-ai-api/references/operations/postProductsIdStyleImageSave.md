@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [StyleImageSaveRequest](../schemas/Style/StyleImageSaveRequest.md)
+
 ## Responses
 
 | Status | Description |

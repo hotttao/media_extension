@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [ModelImageGenerateRequest](../schemas/Model/ModelImageGenerateRequest.md)
+
 ## Responses
 
 | Status | Description |

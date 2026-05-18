@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [DailyPublishPlanCreate](../schemas/Daily/DailyPublishPlanCreate.md)
+
 ## Responses
 
 | Status | Description |

@@ -16,6 +16,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [StyleImageGenerateRequest](../schemas/Style/StyleImageGenerateRequest.md)
+
 ## Responses
 
 | Status | Description |

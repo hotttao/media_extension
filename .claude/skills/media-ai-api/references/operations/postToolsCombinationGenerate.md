@@ -10,6 +10,8 @@
 
 **Content Types:** `application/json`
 
+**Schema:** [ToolsGenerateRequest](../schemas/Tools/ToolsGenerateRequest.md)
+
 ## Responses
 
 | Status | Description |
