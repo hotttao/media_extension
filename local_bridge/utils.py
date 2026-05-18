@@ -21,7 +21,7 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 # HTTP
 # ---------------------------------------------------------------------------
 
-DEFAULT_BASE_URL = "http://localhost:3000"
+DEFAULT_BASE_URL = "http://192.168.2.89:3000"
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
 
 
@@ -257,7 +257,7 @@ def read_cookie(args: Any) -> str | None:
     if env_cookie:
         return env_cookie.strip()
 
-    base_url = getattr(args, "base_url", "http://localhost:3000")
+    base_url = getattr(args, "base_url", "http://192.168.2.89:3000")
     timeout = getattr(args, "timeout", 120)
 
     # Try persistent cache (validated via lightweight API call)

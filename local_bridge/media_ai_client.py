@@ -166,7 +166,7 @@ class MediaAIClient:
     Unified client for all Media AI API interactions.
 
     Usage:
-        client = MediaAIClient(base_url="http://localhost:3000")
+        client = MediaAIClient(base_url="http://192.168.2.89:3000")
         client.resolve_cookie()  # login from .env / env vars
         product = client.fetch_product("3813528280213094793")
         case_path, status = client.build_model_image_task(...)
@@ -174,7 +174,7 @@ class MediaAIClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:3000",
+        base_url: str = "http://192.168.2.89:3000",
         media_base_url: str = "http://192.168.2.38",
         cookie: str | None = None,
         timeout: int = 120,

@@ -167,5 +167,5 @@ pending → claimed → completed
 
 ```bash
 npx openapi-to-skills docs/openapi.json -o .claude/skills/
-npx openapi-to-skills docs/openapi.json -o D:\Code\media\media_ai\.claude\skills
+npx openapi-to-skills@latest docs/openapi.json -o D:\Code\media\media_ai\.claude\skills
 ```

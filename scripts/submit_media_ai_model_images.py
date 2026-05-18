@@ -24,7 +24,7 @@ from local_bridge.utils import (
     load_ids,
 )
 
-DEFAULT_BASE_URL = "http://localhost:3000"
+DEFAULT_BASE_URL = "http://192.168.2.89:3000"
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
 DEFAULT_PROMPT_FILE = Path("prompts/03_模特图.md")
 

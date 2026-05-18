@@ -14,7 +14,7 @@ from local_bridge.domain.services import resolve_media_url, extension_from_url, 
 
 router = APIRouter(tags=["single"])
 
-MEDIA_AI_BASE_URL = "http://localhost:3000"
+MEDIA_AI_BASE_URL = "http://192.168.2.89:3000"
 
 
 def _is_dry_run(request: Request) -> bool:

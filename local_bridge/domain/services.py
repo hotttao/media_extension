@@ -195,7 +195,7 @@ def save_media_ai_generated_image(job, output_path: pathlib.Path) -> dict[str, A
     if not job.media_ai:
         return None
     job.output_dir.mkdir(parents=True, exist_ok=True)
-    base_url = ensure_text(job.media_ai.get("baseUrl") or "http://localhost:3000").rstrip("/")
+    base_url = ensure_text(job.media_ai.get("baseUrl") or "http://192.168.2.89:3000").rstrip("/")
     cookie = ensure_text(job.media_ai.get("cookie") or "").strip() or None
     kind = ensure_text(job.media_ai.get("kind") or "model-image")
     product_id = ensure_text(job.media_ai.get("productId") or "")
@@ -290,7 +290,7 @@ def save_media_ai_generated_images_batch(job, output_paths: list[pathlib.Path]) 
     if not output_paths:
         return None
     job.output_dir.mkdir(parents=True, exist_ok=True)
-    base_url = ensure_text(job.media_ai.get("baseUrl") or "http://localhost:3000").rstrip("/")
+    base_url = ensure_text(job.media_ai.get("baseUrl") or "http://192.168.2.89:3000").rstrip("/")
     cookie = ensure_text(job.media_ai.get("cookie") or "").strip() or None
     kind = ensure_text(job.media_ai.get("kind") or "model-image")
     product_id = ensure_text(job.media_ai.get("productId") or "")
@@ -347,7 +347,7 @@ def save_media_ai_generated_video(job, output_path: pathlib.Path) -> dict[str, A
     if not job.media_ai:
         return None
     job.output_dir.mkdir(parents=True, exist_ok=True)
-    base_url = ensure_text(job.media_ai.get("baseUrl") or "http://localhost:3000").rstrip("/")
+    base_url = ensure_text(job.media_ai.get("baseUrl") or "http://192.168.2.89:3000").rstrip("/")
     cookie = ensure_text(job.media_ai.get("cookie") or "").strip() or None
     product_id = ensure_text(job.media_ai.get("productId") or "")
     if not product_id:
