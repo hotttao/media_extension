@@ -84,6 +84,8 @@ def create_first_frame_image(body: FirstFrameImageCreateRequest, request: Reques
         )
 
     jobs = store.add_jobs([case_path])
+    if not jobs:
+        raise HTTPException(status_code=409, detail="job already exists")
     job = jobs[0]
     sidecar = public_media_ai(load_media_ai_sidecar(case_path))
     return FirstFrameImageCreatedResponse(

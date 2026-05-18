@@ -83,15 +83,41 @@ def create_app(store: JobStore | None = None) -> FastAPI:
     return app
 
 
+def setup_logging(level: str = "info", log_file: Path | None = None) -> None:
+    """Configure logging for local_bridge package. Called once at startup."""
+    import logging
+    level = level.upper()
+    logger = logging.getLogger("local_bridge")
+    logger.setLevel(level)
+    logger.handlers.clear()
+    fmt = logging.Formatter("[%(name)s] %(levelname)s %(message)s")
+    if log_file:
+        fh = logging.FileHandler(log_file, encoding="utf-8")
+        fh.setLevel(level)
+        fh.setFormatter(fmt)
+        logger.addHandler(fh)
+    ch = logging.StreamHandler()
+    ch.setLevel(level)
+    ch.setFormatter(fmt)
+    logger.addHandler(ch)
+    # Also propagate to root so uvicorn and other libs work
+    logging.getLogger().setLevel(level)
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--log-level", default="info", choices=["debug", "info", "warning", "error"])
     args = parser.parse_args()
 
-    uvicorn.run("local_bridge.main:app", host=args.host, port=args.port, reload=False)
+    log_path = Path("runs/bridge.log")
+    log_path.parent.mkdir(exist_ok=True)
+    setup_logging(level=args.log_level, log_file=log_path)
+
+    uvicorn.run("local_bridge.main:app", host=args.host, port=args.port, reload=False, log_level=args.log_level.lower())
 
 
 # Module-level app instance for uvicorn --app-dir reference

@@ -954,7 +954,7 @@
     }
 
     const options = Array.from(listbox.querySelectorAll('[role="option"]'));
-    const targetOption = options.find(el => textIncludes(el.textContent || "", "Seedance"));
+    const targetOption = options.find(el => textIncludes(el.textContent || "", "Seedance 1.0 Fast"));
     if (!targetOption) {
       // Already default-selected
       document.body.click();
@@ -1303,9 +1303,8 @@
 
       const targetOption = options.find((el) => {
         const text = getVideoOptionText(el);
-        return textIncludes(text, "Seedance") && textIncludes(text, "首尾帧");
-      }) || options.find((el) => textIncludes(getVideoOptionText(el), "Seedance"))
-        || options.find((el) => textIncludes(getVideoOptionText(el), "首尾帧"));
+        return textIncludes(text, "Seedance 1.0 Fast");
+      });
 
       if (targetOption) {
         clickElement(targetOption);
@@ -1683,9 +1682,8 @@
 
       const targetOption = options.find((el) => {
         const text = getVideoOptionText(el);
-        return textIncludes(text, "Seedance") && textIncludes(text, "首尾帧");
-      }) || options.find((el) => textIncludes(getVideoOptionText(el), "Seedance"))
-        || options.find((el) => textIncludes(getVideoOptionText(el), "首尾帧"));
+        return textIncludes(text, "Seedance 1.0 Fast");
+      });
 
       if (targetOption) {
         clickElement(targetOption);

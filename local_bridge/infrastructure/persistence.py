@@ -81,6 +81,8 @@ class JobStore:
             job.finished_at = None
             job.failure_reason = None
             job.worker_id = None
+            from local_bridge.infrastructure.events import emit
+            emit({"type": "status_change", "job_id": job.id, "status": "pending", "platform": job.platform})
             return job
 
     def cancel(self, job_id: str) -> Job:
