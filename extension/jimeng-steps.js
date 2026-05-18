@@ -1445,7 +1445,7 @@
       return { ok: false, data: null, error: "No textarea found for video prompt input" };
     }
 
-    const movementText = job.movement || job.prompt || "";
+    const movementText = "";
     const promptText = job.prompt || "";
 
     const movementTextarea = textareas.find((el) => {
@@ -1459,16 +1459,9 @@
       return textIncludes(placeholder, "描述") || textIncludes(placeholder, "创意");
     }) || textareas.find((el) => el !== movementTextarea) || movementTextarea;
 
-    setElementText(movementTextarea, movementText);
+    // Only fill the prompt textarea — movement is already embedded in prompt_text
+    setElementText(promptTextarea, promptText);
     await delay(200);
-
-    if (promptTextarea && promptTextarea !== movementTextarea) {
-      setElementText(promptTextarea, promptText);
-      await delay(200);
-    } else if (promptText && promptTextarea === movementTextarea) {
-      setElementText(promptTextarea, `${movementText}\n${promptText}`.trim());
-      await delay(200);
-    }
 
     return { ok: true, data: { promptLength: promptText.length, movementLength: movementText.length }, error: null };
   }

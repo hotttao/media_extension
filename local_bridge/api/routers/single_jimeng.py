@@ -246,12 +246,11 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
     movement_text = ""
     if body.movementId:
         movement = client.fetch_movement(str(body.movementId))
-        if movement:
-            movement_text = str(movement.get("content") or "")
+        if not movement:
+            raise HTTPException(status_code=404, detail=f"movement {body.movementId} not found")
+        movement_text = str(movement.get("content") or "")
     if movement_text:
         prompt_text = prompt_text.replace("{{ 动作细节 }}", movement_text)
-    else:
-        prompt_text = prompt_text.replace("{{ 动作细节 }}", "[动作描述待填入]")
     case_path = input_dir / "task.md"
     lines = []
     # if first_frame_path and first_frame_path.exists():
@@ -267,6 +266,7 @@ def create_jimeng_video(body: JimengVideoCreateRequest, request: Request):
         "ipId": resolved_ip_id or None,
         "firstFrameId": resolved_first_frame_id or None,
         "firstFrameUrl": first_frame_media_url if first_frame_media_url else "",
+        "movement": movement_text,
         "uploadSubDir": "videos",
     }
     if resolved_ip_id:
