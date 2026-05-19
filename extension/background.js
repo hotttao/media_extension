@@ -214,8 +214,8 @@ async function openJobTab(job) {
     url: targetUrl,
     type: "normal",
     focused: true,
-    width: 650,
-    height: 350,
+    width: 700,
+    height: 400,
   });
   const tab = createdWindow.tabs?.[0];
   if (!createdWindow.id || !tab?.id) {

@@ -838,24 +838,44 @@
 
   async function stepVideoNav(targetUrl) {
     const target = VIDEO_HARDCODE_URL;
+    const debug = () => ({
+      currentUrl: window.location.href,
+      targetUrl: target,
+      comboboxCount: document.querySelectorAll('[role="combobox"]').length,
+      bodyText: document.body?.textContent?.slice(0, 100) || "",
+    });
+
     if (window.location.href !== target) {
       window.location.href = target;
       // Wait for exact URL match — ensures page has fully loaded before returning
       await waitFor(() => window.location.href === target, { timeoutMs: 60000, label: "video_page_navigated" });
     }
     // Wait for page DOM to be ready (comboboxes appear)
-    await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 60000, label: "page_ready" });
-    return { ok: true, data: { status: "navigated", url: window.location.href }, error: null };
+    try {
+      await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 60000, label: "page_ready" });
+    } catch {
+      return { ok: false, data: debug(), error: `S1V: page_ready timeout — no combobox found after 60s | debug: ${JSON.stringify(debug())}` };
+    }
+    return { ok: true, data: { status: "navigated", url: window.location.href, ...debug() }, error: null };
   }
 
   // S2V: Click "视频生成" tab (skip if already on type=video page)
   async function stepVideoTab() {
+    const debug = () => ({
+      url: window.location.href,
+      comboboxCount: document.querySelectorAll('[role="combobox"]').length,
+      comboboxTexts: Array.from(document.querySelectorAll('[role="combobox"]')).map(el => el.textContent?.trim().slice(0, 40)),
+      tabCandidates: Array.from(document.querySelectorAll("*")).filter(el =>
+        el.childNodes.length === 1 && (textLike(el.textContent, "图片生成") || textLike(el.textContent, "视频生成"))
+      ).map(el => ({ text: el.textContent?.trim().slice(0, 40), visible: isVisible(el) })),
+    });
+
     if (window.location.href.includes("type=video")) {
       try {
         await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
-        return { ok: true, data: { status: "already_on_video_tab" }, error: null };
+        return { ok: true, data: { status: "already_on_video_tab", ...debug() }, error: null };
       } catch {
-        return { ok: false, data: null, error: "type=video page loaded but combobox not found" };
+        return { ok: false, data: debug(), error: "S2V: type=video page loaded but combobox not found" };
       }
     }
 
@@ -879,11 +899,11 @@
         }
         return false;
       });
-      if (!clicked) return { ok: false, data: null, error: "视频生成 tab not found" };
+      if (!clicked) return { ok: false, data: debug(), error: "S2V: 视频生成 tab not found via candidates or evaluate" };
       await delay(1000);
       await waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
       await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 15000, label: "combobox" });
-      return { ok: true, data: { status: "clicked_via_evaluate" }, error: null };
+      return { ok: true, data: { status: "clicked_via_evaluate", ...debug() }, error: null };
     }
 
     const parentClickable = tab.parentElement;
@@ -900,7 +920,7 @@
         );
         if (secondClick) { secondClick.click(); }
         await waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
-        return { ok: true, data: { status: "parent_then_option", parentTag: parentClickable.tagName }, error: null };
+        return { ok: true, data: { status: "parent_then_option", parentTag: parentClickable.tagName, ...debug() }, error: null };
       }
       tab.click();
       await delay(1000);
@@ -909,7 +929,7 @@
       );
       if (option) { option.click(); }
       await waitFor(() => window.location.href.includes("type=video"), { timeoutMs: 15000, label: "type=video URL" });
-      return { ok: true, data: { status: "trigger_then_option" }, error: null };
+      return { ok: true, data: { status: "trigger_then_option", ...debug() }, error: null };
     }
 
     tab.click();
@@ -920,13 +940,18 @@
   // S3V: Select Seedance model
   async function stepVideoModel() {
     const delayMs = 500;
+    const debug = () => ({
+      comboboxCount: document.querySelectorAll('[role="combobox"]').length,
+      comboboxTexts: Array.from(document.querySelectorAll('[role="combobox"]')).map(el => el.textContent?.trim().slice(0, 40)),
+      listboxCount: document.querySelectorAll('[role="listbox"]').length,
+      listboxTexts: Array.from(document.querySelectorAll('[role="listbox"]')).map(el => el.textContent?.trim().slice(0, 60)),
+      url: window.location.href,
+    });
 
     try {
       await waitFor(() => document.querySelector('[role="combobox"]'), { timeoutMs: 20000, label: "model_combobox" });
     } catch {
-      const comboboxes = Array.from(document.querySelectorAll('[role="combobox"]'));
-      const comboboxTexts = comboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
-      throw new Error(`Model combobox not found (timed out, found: ${comboboxTexts})`);
+      throw new Error(`S3V: Model combobox not found (timed out after 20s) | debug: ${JSON.stringify(debug())}`);
     }
 
     const comboboxes = Array.from(document.querySelectorAll('[role="combobox"]'));
@@ -934,8 +959,7 @@
       textIncludes(el.textContent || "", "Seedance")
     );
     if (!modelCombobox) {
-      const comboboxTexts = comboboxes.map(el => el.textContent?.trim().slice(0, 30)).join(" | ");
-      throw new Error(`Seedance combobox not found (found: ${comboboxTexts})`);
+      throw new Error(`S3V: Seedance combobox not found | debug: ${JSON.stringify(debug())}`);
     }
 
     let listbox = null;
@@ -949,8 +973,7 @@
       await delay(300);
     }
     if (!listbox) {
-      const allListboxes = Array.from(document.querySelectorAll('[role="listbox"]')).map(el => el.textContent?.trim().slice(0, 40)).join(" | ");
-      throw new Error(`Seedance listbox not visible after combobox click (found: ${allListboxes || "none"})`);
+      throw new Error(`S3V: Seedance listbox not visible after 3 combobox clicks | debug: ${JSON.stringify(debug())}`);
     }
 
     const options = Array.from(listbox.querySelectorAll('[role="option"]'));
@@ -959,14 +982,14 @@
       // Already default-selected
       document.body.click();
       await delay(300);
-      return { ok: true, data: { status: "model_already_selected" }, error: null };
+      return { ok: true, data: { status: "model_already_selected", ...debug() }, error: null };
     }
 
     targetOption.click();
     await delay(delayMs);
     document.body.click();
     await delay(300);
-    return { ok: true, data: { modelText: modelCombobox.textContent?.trim() || "" }, error: null };
+    return { ok: true, data: { modelText: modelCombobox.textContent?.trim() || "", ...debug() }, error: null };
   }
 
   // S4V: Select aspect ratio
@@ -2081,12 +2104,12 @@
   }
 
   async function stepVideoCheckFirstFrameUploaded(asset) {
-    const zone = findVideoFrameZone("棣栧抚");
+    const zone = findVideoFrameZone("首帧");
     if (!zone) {
       return { ok: false, data: null, error: "first frame upload zone not found" };
     }
 
-    const fileInput = findFileInputNearZone(zone, "棣栧抚");
+    const fileInput = findFileInputNearZone(zone, "首帧");
     if (!fileInput) {
       return { ok: false, data: null, error: "first frame file input not found" };
     }
