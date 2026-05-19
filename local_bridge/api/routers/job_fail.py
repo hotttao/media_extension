@@ -12,6 +12,7 @@ def fail_job(job_id: str, body: FailSubmitRequest, request: Request):
     job = store.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job_not_found")
+    store.mark_failed(job_id, body.reason)
     job.output_dir.mkdir(parents=True, exist_ok=True)
     (job.output_dir / "prompt.md").write_text(job.prompt, encoding="utf-8")
     if job.progress:
@@ -29,5 +30,4 @@ def fail_job(job_id: str, body: FailSubmitRequest, request: Request):
             "logs": job.progress or body.logs or [],
         },
     )
-    store.mark_failed(job_id, body.reason)
     return SuccessResponse(ok=True)
